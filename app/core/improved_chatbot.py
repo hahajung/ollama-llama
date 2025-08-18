@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Speed-Optimized Chatbot for Itential Documentation
+Complete Speed-Optimized Chatbot for Itential Documentation
 Optimized for fast local performance with Ollama models.
+Includes streaming, caching, error handling, and performance monitoring.
 """
 
 import os
@@ -9,8 +10,8 @@ import re
 import json
 import time
 import asyncio
-from typing import List, Dict, Optional, Any
-from collections import defaultdict
+from typing import List, Dict, Optional, Any, Tuple
+from collections import defaultdict, deque
 import logging
 from pathlib import Path
 from functools import lru_cache
@@ -61,8 +62,8 @@ class SpeedOptimizedChatbot:
     """
     
     def __init__(self, 
-                 qa_db_path: str = "./qa_enhanced_chroma_db",
-                 fallback_db_path: str = "./super_enhanced_chroma_db",
+                 qa_db_path: str = "./technical_optimized_chroma_db",
+                 fallback_db_path: str = "./qa_enhanced_chroma_db",
                  model: str = "mistral:7b",  # Faster than llama3.1:8b
                  embedding_model: str = "nomic-embed-text",
                  enable_streaming: bool = True,
@@ -71,18 +72,13 @@ class SpeedOptimizedChatbot:
         Initialize speed-optimized chatbot.
         
         Args:
-            qa_db_path: Path to Q&A optimized vector database
-            fallback_db_path: Path to fallback database
-            model: Fast Ollama model (mistral:7b, phi3:mini)
-            embedding_model: Embedding model
-            enable_streaming: Enable response streaming for perceived speed
-            cache_size: Size of response cache
+            qa_db_path: Primary vector database path
+            fallback_db_path: Fallback database path
+            model: Ollama model for text generation
+            embedding_model: Embedding model name
+            enable_streaming: Enable streaming responses
+            cache_size: Maximum cache size
         """
-        
-        logger.info("[INIT] Initializing Speed-Optimized Chatbot...")
-        start_time = time.time()
-        
-        # Configuration
         self.qa_db_path = qa_db_path
         self.fallback_db_path = fallback_db_path
         self.model_name = model
@@ -91,203 +87,118 @@ class SpeedOptimizedChatbot:
         self.cache_size = cache_size
         
         # Performance tracking
-        self.response_times = []
+        self.response_times = deque(maxlen=1000)
         self.cache_hits = 0
         self.cache_misses = 0
         
-        # Initialize components with speed optimizations
-        self._initialize_fast_components()
+        # Multi-level caching
+        self.response_cache = {}  # Full response cache
+        self.search_cache = {}    # Search results cache
+        self.embedding_cache = {} # Embedding cache
         
-        # Setup optimized caching
-        self._setup_caching()
+        # System prompt optimized for speed and accuracy
+        self.system_prompt = """You are a fast, accurate assistant for Itential documentation.
+Provide direct, concise answers based strictly on the context provided.
+Focus on technical details like versions, requirements, and configurations.
+If information is not in the context, say so briefly.
+Keep responses under 200 words unless more detail is specifically requested."""
+
+        # Initialize components
+        self._initialize_components()
         
-        # Verify and benchmark
+        # Verify setup
         self._verify_and_benchmark()
-        
-        init_time = time.time() - start_time
-        logger.info(f"[SUCCESS] Speed-Optimized Chatbot ready in {init_time:.2f}s")
-    
-    def _initialize_fast_components(self):
-        """Initialize all components with speed optimizations."""
-        
-        # Fast embeddings
+
+    def _initialize_components(self):
+        """Initialize all chatbot components with error handling."""
         try:
+            logger.info("[INIT] Initializing speed-optimized chatbot...")
+            
+            # Initialize embeddings
             self.embeddings = OllamaEmbeddings(
                 model=self.embedding_model,
-                # Remove deprecated parameters that cause validation errors
-                # request_timeout=30.0,  # Not supported in newer versions
-                # num_thread=os.cpu_count()  # Not supported in newer versions
+                show_progress=False  # Reduce output for speed
             )
-            logger.info(f"[OK] Fast embeddings initialized: {self.embedding_model}")
-        except Exception as e:
-            logger.error(f"[ERROR] Embeddings initialization failed: {e}")
-            raise
-        
-        # Load vector stores with preference for Q&A database
-        self._initialize_vector_stores()
-        
-        # Fast LLM with optimized settings
-        try:
+            
+            # Try primary database first
+            db_path = self._find_database()
+            logger.info(f"[INIT] Using database: {db_path}")
+            
+            # Initialize vector store
+            self.vector_store = Chroma(
+                persist_directory=db_path,
+                embedding_function=self.embeddings
+            )
+            
+            # Initialize LLM with speed optimizations
             self.llm = ChatOllama(
                 model=self.model_name,
-                # Speed optimizations
-                temperature=0.1,        # Lower temperature for consistency
-                top_k=20,              # Reduced from 40 for speed
-                top_p=0.8,             # Reduced for faster generation
-                num_ctx=4096,          # Smaller context for speed
-                num_predict=512,       # Limit response length for speed
-                repeat_penalty=1.1,
-                # Remove deprecated parameters
-                # num_thread=os.cpu_count(),  # Not supported in newer versions
-                # use_mmap=True,              # Not supported in newer versions
-                # use_mlock=True,             # Not supported in newer versions
-                # Request timeout - use different parameter name
-                timeout=60.0  # Use timeout instead of request_timeout
+                temperature=0.1,  # Low temperature for consistency
+                num_ctx=4096,     # Moderate context window
+                num_predict=512,  # Limit prediction length
+                num_thread=4      # Use multiple threads
             )
-            logger.info(f"[OK] Fast LLM initialized: {self.model_name}")
+            
+            logger.info("[INIT] All components initialized successfully")
+            
         except Exception as e:
-            logger.error(f"[ERROR] LLM initialization failed: {e}")
+            logger.error(f"[INIT] Initialization failed: {e}")
             raise
-        
-        # Speed-optimized system prompt
-        self.system_prompt = self._get_fast_system_prompt()
-    
-    def _initialize_vector_stores(self):
-        """Initialize vector stores with preference for Q&A optimized database."""
-        self.vector_stores = []
-        self.primary_store = None
-        
-        # Try Q&A optimized database first, then fallbacks
-        database_options = [
-            (self.qa_db_path, "qa_optimized"),
-            (self.fallback_db_path, "fallback"),
-            ("./super_enhanced_chroma_db", "super_enhanced"),
-            ("./enhanced_chroma_db", "enhanced"),
-            ("./chroma_db", "original")
+
+    def _find_database(self) -> str:
+        """Find available database with fallback options."""
+        # Check paths relative to current directory and app directory
+        search_paths = [
+            self.qa_db_path,
+            self.fallback_db_path,
+            f"../{self.qa_db_path}",
+            f"../{self.fallback_db_path}",
+            "./super_enhanced_chroma_db",
+            "../super_enhanced_chroma_db"
         ]
         
-        for db_path, db_type in database_options:
-            if os.path.exists(db_path):
-                try:
-                    store = Chroma(
-                        persist_directory=db_path,
-                        embedding_function=self.embeddings
-                    )
-                    
-                    # Quick test
-                    test_results = store.similarity_search("test", k=1)
-                    
-                    self.vector_stores.append((db_type, store))
-                    if not self.primary_store:
-                        self.primary_store = store
-                    
-                    logger.info(f"[OK] {db_type.replace('_', ' ').title()} database loaded: {db_path}")
-                    break  # Use first working database for speed
-                        
-                except Exception as e:
-                    logger.warning(f"[WARNING] Failed to load {db_type} database: {e}")
-                    continue
+        for path in search_paths:
+            if Path(path).exists() and Path(path).is_dir():
+                logger.info(f"[DB] Found database at: {path}")
+                return path
         
-        if not self.vector_stores:
-            raise RuntimeError("[ERROR] No vector databases found!")
-        
-        logger.info(f"[INFO] Using {self.vector_stores[0][0]} database for optimal speed")
-    
-    def _get_fast_system_prompt(self) -> str:
-        """Optimized system prompt for fast, accurate responses."""
-        return """You are a fast and accurate Itential documentation assistant. Provide direct, concise answers based on the context.
+        # If no database found, create a fallback message
+        logger.warning("[DB] No existing database found")
+        raise FileNotFoundError(f"No vector database found in any of: {search_paths}")
 
-SPEED RULES:
-1. Start with the direct answer immediately
-2. Be concise but complete
-3. Include specific details when available (versions, steps, examples)
-4. Skip unnecessary explanations
-5. Use bullet points or numbered lists for clarity
+    def _get_query_hash(self, query: str, k: int = 5) -> str:
+        """Generate cache key for query."""
+        cache_string = f"{query.lower().strip()}_{k}_{self.model_name}"
+        return hashlib.md5(cache_string.encode()).hexdigest()
 
-ACCURACY RULES:
-1. ONLY use information from the provided context
-2. Quote exact versions, requirements, or specifications
-3. If context is incomplete, state what's missing
-4. Cite source URLs when relevant
-
-RESPONSE FORMAT:
-- Direct answer first
-- Key details in bullets/numbers
-- Code examples in code blocks
-- Source citation at end
-
-Keep responses focused and actionable for Itential users."""
-
-    def _setup_caching(self):
-        """Setup aggressive caching for maximum speed."""
-        
-        # Response cache with LRU eviction
-        self.response_cache = {}
-        self.cache_order = []
-        
-        # Embedding cache for common queries
-        self.embedding_cache = {}
-        
-        # Search result cache
-        self.search_cache = {}
-        
-        logger.info(f"[CACHE] Caching system initialized (size: {self.cache_size})")
-
-    @lru_cache(maxsize=1000)
-    def _cached_embedding_search(self, query_hash: str, k: int) -> str:
-        """Cached embedding search for repeated queries."""
-        # This is a placeholder - actual implementation would use the hash
-        # to lookup pre-computed results
-        return f"cached_search_{query_hash}_{k}"
-
-    def _get_query_hash(self, query: str, k: int) -> str:
-        """Generate hash for query caching."""
-        return hashlib.md5(f"{query.lower().strip()}_{k}".encode()).hexdigest()[:16]
-
-    def fast_search(self, query: str, k: int = 5) -> List[Dict]:
-        """Ultra-fast search with aggressive caching and optimizations."""
-        start_time = time.time()
-        
-        # Check cache first
+    def fast_search(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+        """Ultra-fast vector search with caching."""
+        # Check search cache
         query_hash = self._get_query_hash(query, k)
         if query_hash in self.search_cache:
-            self.cache_hits += 1
-            search_time = time.time() - start_time
-            logger.debug(f"[CACHE] Cache hit for query in {search_time:.3f}s")
             return self.search_cache[query_hash]
         
-        self.cache_misses += 1
-        
         try:
-            # Fast vector search with reduced k for speed
-            search_k = min(k * 2, 10)  # Limit search scope
-            results = self.primary_store.similarity_search_with_score(query, k=search_k)
+            # Perform similarity search
+            docs = self.vector_store.similarity_search_with_score(query, k=k)
             
-            # Fast result processing
-            processed_results = []
-            for doc, distance in results[:k]:  # Only process what we need
-                # Quick score calculation
-                score = max(0, (2.0 - distance)) * 10
-                
-                processed_results.append({
+            # Format results
+            results = []
+            for doc, score in docs:
+                results.append({
                     'content': doc.page_content,
                     'source': doc.metadata.get('source', ''),
                     'title': doc.metadata.get('title', ''),
-                    'score': score,
-                    'metadata': doc.metadata,
-                    'method': 'fast_vector'
+                    'score': score
                 })
             
-            # Cache results
-            self._update_search_cache(query_hash, processed_results)
+            # Cache results with LRU eviction
+            self._update_search_cache(query_hash, results)
             
-            search_time = time.time() - start_time
-            logger.debug(f"[SEARCH] Fast search completed in {search_time:.3f}s")
-            
-            return processed_results
+            return results
             
         except Exception as e:
-            logger.error(f"[ERROR] Fast search failed: {e}")
+            logger.error(f"[SEARCH] Search failed: {e}")
             return []
 
     def _update_search_cache(self, query_hash: str, results: List[Dict]):
@@ -418,7 +329,7 @@ Keep responses focused and actionable for Itential users."""
         
         scores = [r.get('score', 0) for r in results[:3]]
         avg_score = sum(scores) / len(scores) if scores else 0
-        return min(1.0, avg_score / 15.0)  # Simplified calculation
+        return min(1.0, max(0.0, 1.0 - avg_score / 2.0))  # Convert distance to confidence
 
     def _fast_format_context(self, results: List[Dict]) -> str:
         """Fast context formatting with minimal processing."""
@@ -470,6 +381,37 @@ Keep responses focused and actionable for Itential users."""
     def generate_enhanced_response(self, query: str, top_k: int = 5) -> Dict[str, Any]:
         """Backwards compatible method."""
         return self.generate_fast_response(query, top_k)
+
+    def stream_response(self, query: str, k: int = 5):
+        """Stream response in real-time for UI integration."""
+        try:
+            # Get search results first
+            context_results = self.fast_search(query, k)
+            
+            if not context_results:
+                yield "No relevant information found."
+                return
+            
+            # Format context
+            formatted_context = self._fast_format_context(context_results)
+            
+            # Create prompt
+            prompt = ChatPromptTemplate.from_messages([
+                SystemMessagePromptTemplate.from_template(self.system_prompt),
+                HumanMessagePromptTemplate.from_template(
+                    "Context: {context}\n\nQuestion: {query}\n\nProvide a direct, concise answer:"
+                )
+            ])
+            
+            messages = prompt.format_messages(context=formatted_context, query=query)
+            
+            # Stream response
+            for chunk in self.llm.stream(messages):
+                if hasattr(chunk, 'content') and chunk.content:
+                    yield chunk.content
+                    
+        except Exception as e:
+            yield f"Error generating response: {e}"
 
     def _verify_and_benchmark(self):
         """Verify setup and run performance benchmark."""
@@ -562,6 +504,25 @@ Keep responses focused and actionable for Itential users."""
         self.cache_size = min(2000, self.cache_size * 2)
         
         logger.info("[OK] Speed optimizations applied")
+
+    def get_database_info(self) -> Dict[str, Any]:
+        """Get information about the vector database."""
+        try:
+            # Get collection info
+            collection = self.vector_store._collection
+            count = collection.count()
+            
+            return {
+                'database_path': self.qa_db_path,
+                'document_count': count,
+                'embedding_model': self.embedding_model,
+                'collection_name': collection.name if hasattr(collection, 'name') else 'unknown'
+            }
+        except Exception as e:
+            return {
+                'database_path': self.qa_db_path,
+                'error': str(e)
+            }
 
 
 # Model-specific optimized chatbots
