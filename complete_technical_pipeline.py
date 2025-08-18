@@ -1,10 +1,15 @@
-# run_enhanced_pipeline_clean.py - No emojis version
+#!/usr/bin/env python3
+"""
+Complete Technical Pipeline Runner
+Runs the full enhanced RAG pipeline for technical documentation.
+"""
 
 import subprocess
 import sys
 import time
 from pathlib import Path
 import os
+import json
 
 class EnhancedPipelineRunner:
     """Complete pipeline runner for the enhanced RAG system."""
@@ -12,7 +17,7 @@ class EnhancedPipelineRunner:
     def __init__(self):
         self.steps = [
             ("Enhanced Scraper", "comprehensive_technical_scraper.py"),
-            ("Enhanced Embedder", "technical_embedder.py"),
+            ("Enhanced Embedder", "robust_technical_embedder.py"),
             ("Test Enhanced Chatbot", "app/core/improved_chatbot.py")
         ]
         
@@ -28,7 +33,8 @@ class EnhancedPipelineRunner:
             ('langchain', 'langchain'),
             ('chromadb', 'chromadb'),
             ('streamlit', 'streamlit'),
-            ('numpy', 'numpy')
+            ('numpy', 'numpy'),
+            ('requests', 'requests')
         ]
         
         missing = []
@@ -56,6 +62,23 @@ class EnhancedPipelineRunner:
             response = requests.get("http://localhost:11434/api/tags", timeout=5)
             if response.status_code == 200:
                 print("[OK] Ollama is running")
+                
+                # Check for required models
+                models_data = response.json()
+                available_models = [model['name'] for model in models_data.get('models', [])]
+                
+                required_models = ['nomic-embed-text', 'mistral:7b']
+                missing_models = [model for model in required_models if not any(model in available for available in available_models)]
+                
+                if missing_models:
+                    print(f"[WARNING] Missing required models: {missing_models}")
+                    print("Pull them with:")
+                    for model in missing_models:
+                        print(f"   ollama pull {model}")
+                    return False
+                else:
+                    print("[OK] Required models available")
+                
                 return True
             else:
                 print("[ERROR] Ollama responded with error")
@@ -93,8 +116,19 @@ class EnhancedPipelineRunner:
         
         try:
             start_time = time.time()
-            result = subprocess.run([sys.executable, script_path], 
-                                  capture_output=True, text=True, timeout=3600)
+            
+            # Special handling for test step
+            if "Test" in step_name:
+                # Just test import for chatbot
+                print("[TEST] Testing chatbot import...")
+                result = subprocess.run([
+                    sys.executable, "-c", 
+                    f"import sys; sys.path.append('.'); sys.path.append('./app/core'); from improved_chatbot import SpeedOptimizedChatbot; print('Chatbot import successful')"
+                ], capture_output=True, text=True, timeout=60)
+            else:
+                # Run the actual script
+                result = subprocess.run([sys.executable, script_path], 
+                                      capture_output=True, text=True, timeout=3600)
             
             duration = time.time() - start_time
             
@@ -114,6 +148,12 @@ class EnhancedPipelineRunner:
                 print(f"[ERROR] {step_name} failed!")
                 print("Error output:")
                 print(result.stderr)
+                
+                # Show stdout too for debugging
+                if result.stdout:
+                    print("Standard output:")
+                    print(result.stdout)
+                
                 return False
                 
         except subprocess.TimeoutExpired:
@@ -129,19 +169,38 @@ class EnhancedPipelineRunner:
         
         expected_files = [
             ("Scraped data", "comprehensive_itential_docs.jsonl"),
+            ("Technical data", "complete_technical_docs.jsonl"),
             ("Vector database", "technical_optimized_chroma_db"),
         ]
         
         all_good = True
         for description, path in expected_files:
-            if Path(path).exists():
+            path_obj = Path(path)
+            if path_obj.exists():
                 if path.endswith('.jsonl'):
                     # Check file size
-                    size = Path(path).stat().st_size
+                    size = path_obj.stat().st_size
                     print(f"   [OK] {description}: {size:,} bytes")
+                    
+                    # Count lines for jsonl files
+                    try:
+                        with open(path_obj, 'r', encoding='utf-8') as f:
+                            line_count = sum(1 for line in f if line.strip())
+                        print(f"        Contains {line_count} documents")
+                    except Exception as e:
+                        print(f"        Could not count lines: {e}")
+                        
                 else:
                     # Check directory exists
                     print(f"   [OK] {description}: directory exists")
+                    
+                    # Check if directory has content
+                    try:
+                        files_in_dir = list(path_obj.iterdir())
+                        print(f"        Contains {len(files_in_dir)} files")
+                    except Exception as e:
+                        print(f"        Could not check directory contents: {e}")
+                        
             else:
                 print(f"   [MISSING] {description}: not found at {path}")
                 all_good = False
@@ -155,9 +214,11 @@ class EnhancedPipelineRunner:
         
         # Pre-flight checks
         if not self.check_dependencies():
+            print("\n[FAILED] Dependencies not satisfied")
             return False
         
         if not self.check_ollama():
+            print("\n[FAILED] Ollama setup issues")
             return False
         
         self.setup_directories()
@@ -191,10 +252,56 @@ class EnhancedPipelineRunner:
         print("   3. Run: streamlit run app/enhanced_ui.py")
         
         return True
+    
+    def run_quick_test(self):
+        """Run a quick test of the pipeline without full execution."""
+        print("Quick Pipeline Test")
+        print("=" * 30)
+        
+        # Check files exist
+        print("\nChecking pipeline files...")
+        for step_name, script_path in self.steps:
+            if Path(script_path).exists():
+                print(f"   [OK] {script_path}")
+            else:
+                print(f"   [MISSING] {script_path}")
+        
+        # Check outputs exist
+        print("\nChecking existing outputs...")
+        self.verify_outputs()
+        
+        # Test imports
+        print("\nTesting imports...")
+        try:
+            # Test scraper
+            import comprehensive_technical_scraper
+            print("   [OK] Scraper imports")
+        except Exception as e:
+            print(f"   [ERROR] Scraper import failed: {e}")
+        
+        try:
+            # Test embedder
+            import robust_technical_embedder
+            print("   [OK] Embedder imports")
+        except Exception as e:
+            print(f"   [ERROR] Embedder import failed: {e}")
+        
+        try:
+            # Test chatbot
+            sys.path.append('./app/core')
+            from improved_chatbot import SpeedOptimizedChatbot
+            print("   [OK] Chatbot imports")
+        except Exception as e:
+            print(f"   [ERROR] Chatbot import failed: {e}")
 
 def main():
     """Main function to run the enhanced pipeline."""
     runner = EnhancedPipelineRunner()
+    
+    # Check command line arguments
+    if len(sys.argv) > 1 and sys.argv[1] == "--test":
+        runner.run_quick_test()
+        return
     
     try:
         success = runner.run_complete_pipeline()
@@ -208,6 +315,8 @@ def main():
         sys.exit(1)
     except Exception as e:
         print(f"\n[CRASHED] Pipeline crashed: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":
