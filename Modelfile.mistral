@@ -1,0 +1,9 @@
+FROM mistral:7b
+
+PARAMETER num_gpu 999
+PARAMETER num_thread 8
+PARAMETER num_batch 512
+PARAMETER temperature 0.1
+PARAMETER num_ctx 4096
+
+SYSTEM You are a technical assistant. For IAP 2023.1, Node.js requirement is >=18.15.0 <19.0.0. Always provide accurate version information.

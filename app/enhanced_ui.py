@@ -62,11 +62,7 @@ def init_technical_chatbot():
     
     # Updated database paths from the new pipeline
     database_options = [
-        ("./technical_optimized_chroma_db", "Technical Optimized (New Pipeline)"),
-        ("./qa_enhanced_chroma_db", "QA Enhanced"),
-        ("./super_enhanced_chroma_db", "Super Enhanced"),
-        ("./enhanced_chroma_db", "Enhanced"),
-        ("./chroma_db", "Original")
+        ("./optimized_technical_db", "Technical Optimized (New Pipeline)")
     ]
     
     # Find the best available database
