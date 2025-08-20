@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """
-Technical Documentation Embedder
-Creates optimized vector database for fast technical queries about versions and dependencies.
+Comprehensive Technical Documentation Embedder
+Captures the full breadth of Itential technical content including:
+- Database Migration Scripts with examples
+- Adapter configurations (LDAP, Email, Local AAA, etc.)
+- Automation Studio features (Search Object Attributes, Form Data)
+- ServiceNow Application Components
+- Network configurations and troubleshooting
+- Code examples and JSON configurations
+- Step-by-step procedures
 """
 
 import json
@@ -11,8 +18,9 @@ from typing import List, Dict, Any, Optional, Tuple, Set
 import logging
 import time
 from collections import defaultdict
+import shutil
 
-# Universal imports
+# Use your existing compatibility imports
 try:
     from compatibility_imports import (
         get_ollama_embeddings, get_chroma, 
@@ -46,610 +54,689 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class TechnicalDocumentationEmbedder:
-    """Specialized embedder for technical documentation with focus on versions and dependencies."""
+class ComprehensiveTechnicalEmbedder:
+    """Comprehensive embedder that captures ALL technical content from Itential documentation."""
     
     def __init__(self, data_file: str = "complete_technical_docs.jsonl"):
         self.data_file = Path(data_file)
         self.embeddings = OllamaEmbeddings(model="nomic-embed-text")
+        self.db_path = "./technical_optimized_chroma_db"
         
-        # Track extracted technical data
-        self.version_matrix: Dict[str, Dict[str, str]] = defaultdict(dict)
-        self.dependency_relationships: Dict[str, Dict] = {}
-        self.product_info: Dict[str, Dict] = {}
+        # Comprehensive content tracking
+        self.content_categories = {
+            'dependencies': [],
+            'migration_scripts': [],
+            'adapter_configs': [], 
+            'automation_studio': [],
+            'servicenow_components': [],
+            'network_configs': [],
+            'code_examples': [],
+            'procedures': [],
+            'troubleshooting': [],
+            'api_references': []
+        }
         
-        # Technical question templates for comprehensive coverage
-        self.question_templates = {
-            'version_specific': [
-                "What version of {dependency} is required for {product} {version}?",
-                "What {dependency} version should I use for {product} {version}?",
-                "{dependency} requirements for {product} {version}",
-                "What version of {dependency} does {product} {version} support?",
-                "What {dependency} version is compatible with {product} {version}?",
-                "{dependency} version for {product} {version}",
-                "Show me {dependency} requirements for {product} {version}"
+        # Enhanced extraction patterns
+        self.content_patterns = {
+            'migration_script': [
+                'migration script', 'migratePropertiesToDatabase', 'database migration',
+                'node_modules/@itential', 'cd /opt/pronghorn', 'properties.json'
             ],
-            'general_product': [
-                "What are the system requirements for {product}?",
-                "What dependencies does {product} need?",
-                "Show me {product} prerequisites",
-                "What versions of {product} are available?",
-                "List {product} requirements",
-                "Dependencies for {product}",
-                "{product} installation requirements"
+            'adapter_config': [
+                'adapter configuration', 'service config', 'ldap adapter', 'email adapter',
+                'local aaa', 'adapter properties', 'brokers', 'authentication'
             ],
-            'dependency_focused': [
-                "What {dependency} versions are supported?",
-                "Show me all {dependency} requirements",
-                "What products use {dependency}?",
-                "Which {product} versions support {dependency}?",
-                "What are the {dependency} version requirements?"
+            'automation_studio': [
+                'automation studio', 'search object attributes', 'form data', 'workflow',
+                'formData', 'query task', 'automation canvas', 'job variable'
             ],
-            'comparison': [
-                "Compare {dependency} requirements across {product} versions",
-                "What changed in {dependency} requirements for {product}?",
-                "Differences between {product} {version1} and {version2} {dependency} requirements"
+            'servicenow': [
+                'servicenow', 'application components', 'service now', 'snow',
+                'incident', 'service catalog', 'cmdb'
+            ],
+            'network_adapter': [
+                'network adapter', 'automation gateway', 'connectivity check',
+                'troubleshooting adapter', 'endpoint configuration'
+            ],
+            'code_example': [
+                '{\n', '#!/', 'function', 'const ', 'var ', 'npm', 'git clone',
+                'docker', 'kubectl', 'ansible'
+            ],
+            'procedure': [
+                'step 1', 'step 2', 'navigate to', 'click', 'select', 'configure',
+                'install', 'restart', 'verify'
             ]
         }
 
-    def extract_version_matrix_from_tables(self, doc_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract comprehensive version matrix from tables."""
-        version_data = {
-            'versions_found': {},
-            'dependency_matrix': {},
-            'tables_processed': 0
+    def create_comprehensive_system(self) -> Any:
+        """Create comprehensive system that captures all technical content."""
+        logger.info("Creating Comprehensive Technical Documentation System...")
+        
+        # Load and analyze documents
+        documents = self._load_documents()
+        if not documents:
+            raise ValueError("No documents found. Run the scraper first.")
+        
+        # Categorize all content
+        self._categorize_all_content(documents)
+        
+        # Create comprehensive document chunks
+        all_documents = self._create_comprehensive_chunks(documents)
+        
+        # Create vector store
+        if Path(self.db_path).exists():
+            shutil.rmtree(self.db_path)
+            logger.info(f"Removed existing database: {self.db_path}")
+        
+        vector_store = Chroma.from_documents(
+            documents=all_documents,
+            embedding=self.embeddings,
+            persist_directory=self.db_path
+        )
+        
+        # Test comprehensive capabilities
+        self._test_comprehensive_system(vector_store)
+        
+        logger.info("Comprehensive Technical System Ready!")
+        return vector_store
+
+    def _load_documents(self) -> List[Dict[str, Any]]:
+        """Load documents from scraper output."""
+        documents = []
+        
+        if not self.data_file.exists():
+            logger.error(f"Data file {self.data_file} not found. Run the scraper first.")
+            return []
+        
+        with open(self.data_file, "r", encoding="utf-8") as f:
+            for line_num, line in enumerate(f, 1):
+                if line.strip():
+                    try:
+                        doc_data = json.loads(line)
+                        documents.append(doc_data)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Skipping malformed JSON on line {line_num}: {e}")
+        
+        logger.info(f"Loaded {len(documents)} documents for comprehensive processing")
+        return documents
+
+    def _categorize_all_content(self, documents: List[Dict]) -> None:
+        """Categorize all content by type for comprehensive coverage."""
+        logger.info("Categorizing all technical content...")
+        
+        for doc in documents:
+            content = (doc.get('searchable_text', '') + ' ' + 
+                      doc.get('raw_text', '') + ' ' + 
+                      doc.get('title', '')).lower()
+            
+            # Check each content pattern
+            for category, patterns in self.content_patterns.items():
+                if any(pattern in content for pattern in patterns):
+                    self.content_categories[self._map_to_category(category)].append(doc)
+                    break
+            else:
+                # Default categorization by content type
+                content_type = doc.get('content_type', 'general')
+                if content_type == 'dependencies':
+                    self.content_categories['dependencies'].append(doc)
+                elif 'code' in content or 'script' in content:
+                    self.content_categories['code_examples'].append(doc)
+                else:
+                    self.content_categories['procedures'].append(doc)
+        
+        # Log categorization results
+        for category, docs in self.content_categories.items():
+            logger.info(f"  {category}: {len(docs)} documents")
+
+    def _map_to_category(self, pattern_type: str) -> str:
+        """Map pattern types to categories."""
+        mapping = {
+            'migration_script': 'migration_scripts',
+            'adapter_config': 'adapter_configs',
+            'automation_studio': 'automation_studio',
+            'servicenow': 'servicenow_components',
+            'network_adapter': 'network_configs',
+            'code_example': 'code_examples',
+            'procedure': 'procedures'
         }
-        
-        tables = doc_data.get('tables', [])
-        
-        for table in tables:
-            if table.get('technical_relevance') in ['critical', 'high']:
-                version_data['tables_processed'] += 1
-                
-                # Extract from markdown table
-                markdown = table.get('markdown', '')
-                if markdown:
-                    parsed_data = self._parse_dependency_table(markdown)
-                    if parsed_data:
-                        version_data['dependency_matrix'].update(parsed_data)
-                
-                # Extract from table metadata
-                extracted_versions = table.get('extracted_versions', [])
-                for version_info in extracted_versions:
-                    product = version_info.get('product', '').lower()
-                    version = version_info.get('version', '')
-                    if product and version:
-                        if product not in version_data['versions_found']:
-                            version_data['versions_found'][product] = set()
-                        version_data['versions_found'][product].add(version)
-        
-        return version_data
+        return mapping.get(pattern_type, 'procedures')
 
-    def _parse_dependency_table(self, markdown_table: str) -> Optional[Dict[str, Dict]]:
-        """Parse dependency table to extract version requirements."""
-        try:
-            lines = markdown_table.strip().split('\n')
-            if len(lines) < 3:  # Need header, separator, and at least one data row
-                return None
-            
-            # Parse header
-            headers = [h.strip().lower() for h in lines[0].split('|') if h.strip()]
-            if not headers:
-                return None
-            
-            # Find column indices for important data
-            version_col = None
-            product_col = None
-            dependency_cols = {}
-            
-            for i, header in enumerate(headers):
-                header_clean = header.replace(':', '').strip()
-                if any(term in header_clean for term in ['version', 'release', 'iap', 'iag', 'platform']):
-                    if not version_col:  # Take first version column
-                        version_col = i
-                        product_col = i
-                elif any(dep in header_clean for dep in ['python', 'node', 'mongo', 'redis', 'rabbit']):
-                    dependency_cols[header_clean] = i
-            
-            if version_col is None:
-                return None
-            
-            # Parse data rows
-            dependency_matrix = {}
-            
-            for line in lines[2:]:  # Skip header and separator
-                if '|' not in line:
-                    continue
-                    
-                cells = [cell.strip() for cell in line.split('|') if cell.strip()]
-                if len(cells) <= max(version_col, max(dependency_cols.values()) if dependency_cols else 0):
-                    continue
-                
-                product_version = cells[version_col] if version_col < len(cells) else ''
-                if not product_version or product_version in ['---', '']:
-                    continue
-                
-                # Clean product version
-                product_version = self._clean_version_string(product_version)
-                
-                if product_version:
-                    dependency_matrix[product_version] = {}
-                    
-                    # Extract dependency versions
-                    for dep_name, col_idx in dependency_cols.items():
-                        if col_idx < len(cells):
-                            dep_version = self._clean_version_string(cells[col_idx])
-                            if dep_version:
-                                dependency_matrix[product_version][dep_name] = dep_version
-            
-            return dependency_matrix if dependency_matrix else None
-            
-        except Exception as e:
-            logger.warning(f"Error parsing dependency table: {e}")
-            return None
+    def _create_comprehensive_chunks(self, documents: List[Dict]) -> List[Document]:
+        """Create comprehensive chunks covering all content types."""
+        all_documents = []
+        
+        # 1. Dependency tables and version info
+        all_documents.extend(self._create_dependency_chunks())
+        
+        # 2. Migration scripts with examples
+        all_documents.extend(self._create_migration_script_chunks())
+        
+        # 3. Adapter configurations
+        all_documents.extend(self._create_adapter_config_chunks())
+        
+        # 4. Automation Studio content
+        all_documents.extend(self._create_automation_studio_chunks())
+        
+        # 5. ServiceNow components
+        all_documents.extend(self._create_servicenow_chunks())
+        
+        # 6. Code examples and configurations
+        all_documents.extend(self._create_code_example_chunks())
+        
+        # 7. Procedures and troubleshooting
+        all_documents.extend(self._create_procedure_chunks())
+        
+        # 8. General technical content
+        all_documents.extend(self._create_general_technical_chunks(documents))
+        
+        logger.info(f"Created {len(all_documents)} comprehensive document chunks")
+        return all_documents
 
-    def _clean_version_string(self, version_str: str) -> str:
-        """Clean and normalize version strings."""
-        if not version_str or version_str.strip() in ['---', '', 'N/A', 'TBD']:
-            return ''
+    def _create_dependency_chunks(self) -> List[Document]:
+        """Create dependency-specific chunks."""
+        chunks = []
+        dependency_docs = self.content_categories['dependencies']
         
-        # Remove common prefixes/suffixes
-        cleaned = version_str.strip()
-        cleaned = re.sub(r'^[>=<~\^]+', '', cleaned)  # Remove version operators
-        cleaned = re.sub(r'\s*\([^)]*\)', '', cleaned)  # Remove parenthetical notes
-        cleaned = cleaned.replace('*', '').strip()
+        for doc in dependency_docs:
+            # Extract dependency tables
+            tables = doc.get('tables', [])
+            for table in tables:
+                if self._is_dependency_table(table):
+                    chunks.extend(self._process_dependency_table(table, doc))
         
-        return cleaned if cleaned else ''
+        logger.info(f"Created {len(chunks)} dependency chunks")
+        return chunks
 
-    def create_comprehensive_qa_pairs(self, doc_data: Dict[str, Any]) -> List[Document]:
-        """Create comprehensive Q&A pairs for all technical scenarios."""
-        qa_documents: List[Document] = []
+    def _create_migration_script_chunks(self) -> List[Document]:
+        """Create migration script chunks with examples."""
+        chunks = []
+        migration_docs = self.content_categories['migration_scripts']
         
-        url = doc_data.get('url', 'unknown')
-        title = doc_data.get('title', 'Untitled')
-        content_type = doc_data.get('content_type', 'general')
-        
-        # Extract version matrix
-        version_data = self.extract_version_matrix_from_tables(doc_data)
-        dependency_matrix = version_data.get('dependency_matrix', {})
-        
-        if dependency_matrix:
-            logger.info(f"Processing dependency matrix with {len(dependency_matrix)} product versions")
+        for doc in migration_docs:
+            content = doc.get('searchable_text', '') or doc.get('raw_text', '')
+            title = doc.get('title', '')
             
-            # Create Q&A pairs for each product version and dependency combination
-            for product_version, dependencies in dependency_matrix.items():
+            # Extract migration script content
+            if 'migration' in content.lower() and 'script' in content.lower():
                 
-                # Parse product and version
-                product_info = self._parse_product_version(product_version)
-                if not product_info:
-                    continue
+                # Create comprehensive migration chunk
+                migration_content = f"""
+Database Migration Script Information from {title}:
+
+{content}
+
+Migration Script Examples and Commands:
+- Script location: /opt/pronghorn/current/node_modules/@itential/pronghorn-core/migration_scripts
+- Main script: migratePropertiesToDatabase.js
+- Command format: node migratePropertiesToDatabase.js --userInputs [parameters]
+- Backup creation: properties_b4b03d30-ad00-4f61-bd9e-7953968ef8c4.json format
+
+This script migrates properties.json configuration into MongoDB database.
+After migration, properties.json only contains MongoDB connection properties.
+All other configuration parameters are stored in the default 'pronghorn' database.
+"""
                 
-                product = product_info['product']
-                version = product_info['version']
+                chunks.append(Document(
+                    page_content=migration_content,
+                    metadata={
+                        "source": doc.get('url', 'unknown'),
+                        "title": title,
+                        "content_type": "migration_script",
+                        "category": "database_migration",
+                        "priority": "critical"
+                    }
+                ))
                 
-                # Create version-specific Q&A pairs for each dependency
-                for dependency, dep_version in dependencies.items():
-                    if not dep_version:
-                        continue
-                    
-                    # Generate multiple question variations
-                    for template in self.question_templates['version_specific']:
-                        question = template.format(
-                            dependency=dependency.title(),
-                            product=product,
-                            version=version
-                        )
-                        
-                        # Create comprehensive answer
-                        answer = self._create_dependency_answer(
-                            product, version, dependency, dep_version, dependency_matrix
-                        )
-                        
-                        qa_content = f"Question: {question}\n\nAnswer: {answer}"
-                        
-                        qa_documents.append(Document(
-                            page_content=qa_content,
+                # Create command-specific chunks
+                code_blocks = doc.get('code_blocks', [])
+                for code_block in code_blocks:
+                    if 'migration' in code_block.get('content', '').lower():
+                        chunks.append(Document(
+                            page_content=f"Migration Command Example:\n{code_block.get('content', '')}",
                             metadata={
-                                "source": url,
-                                "title": title,
-                                "content_type": "technical_qa",
-                                "question": question,
-                                "product": product,
-                                "product_version": version,
-                                "dependency": dependency,
-                                "dependency_version": dep_version,
-                                "priority": "critical",
-                                "qa_type": "version_specific"
+                                "source": doc.get('url', 'unknown'),
+                                "content_type": "migration_command",
+                                "category": "database_migration"
                             }
                         ))
-                
-                # Create general product questions
-                for template in self.question_templates['general_product']:
-                    question = template.format(product=f"{product} {version}")
-                    
-                    answer = self._create_general_requirements_answer(
-                        product, version, dependencies, dependency_matrix
-                    )
-                    
-                    qa_content = f"Question: {question}\n\nAnswer: {answer}"
-                    
-                    qa_documents.append(Document(
-                        page_content=qa_content,
-                        metadata={
-                            "source": url,
-                            "title": title,
-                            "content_type": "technical_qa",
-                            "question": question,
-                            "product": product,
-                            "product_version": version,
-                            "priority": "high",
-                            "qa_type": "general_requirements"
-                        }
-                    ))
         
-        # Handle version lifecycle content
-        if content_type == 'version_lifecycle':
-            extracted_versions = doc_data.get('extracted_versions', {})
-            
-            for product, versions in extracted_versions.items():
-                version_list = list(versions) if isinstance(versions, (list, set)) else [versions]
-                
-                # Create version listing Q&A pairs
-                version_questions = [
-                    f"What versions of {product.upper()} are available?",
-                    f"List all {product.upper()} versions",
-                    f"Show me {product.upper()} releases",
-                    f"What {product.upper()} versions are supported?",
-                    f"Which {product.upper()} versions can I use?"
-                ]
-                
-                for question in version_questions:
-                    answer = f"Available {product.upper()} versions include: {', '.join(sorted(version_list))}. " \
-                            f"For specific version details and support information, refer to the official documentation."
-                    
-                    qa_content = f"Question: {question}\n\nAnswer: {answer}"
-                    
-                    qa_documents.append(Document(
-                        page_content=qa_content,
-                        metadata={
-                            "source": url,
-                            "title": title,
-                            "content_type": "version_qa",
-                            "question": question,
-                            "product": product,
-                            "available_versions": version_list,
-                            "priority": "critical",
-                            "qa_type": "version_listing"
-                        }
-                    ))
-        
-        return qa_documents
+        logger.info(f"Created {len(chunks)} migration script chunks")
+        return chunks
 
-    def _parse_product_version(self, product_version_str: str) -> Optional[Dict[str, str]]:
-        """Parse product and version from combined string."""
-        # Common patterns
-        patterns = [
-            r'(IAP|iap)\s*([0-9]{4}\.[0-9]+(?:\.[0-9]+)?)',
-            r'(IAG|iag)\s*([0-9]{4}\.[0-9]+(?:\.[0-9]+)?)',
-            r'(Platform|platform)\s*([0-9]+(?:\.[0-9]+)?)',
-            r'([A-Za-z\s]+)\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, product_version_str, re.IGNORECASE)
-            if match:
-                product = match.group(1).strip().upper()
-                version = match.group(2).strip()
-                return {'product': product, 'version': version}
-        
-        return None
-
-    def _create_dependency_answer(self, product: str, version: str, dependency: str, 
-                                 dep_version: str, full_matrix: Dict) -> str:
-        """Create comprehensive dependency-specific answer."""
-        answer_parts = [
-            f"For {product} {version}, the required {dependency} version is {dep_version}."
-        ]
-        
-        # Add context from other versions if available
-        other_versions = []
-        for prod_ver, deps in full_matrix.items():
-            if dependency in deps and prod_ver != f"{product} {version}":
-                other_versions.append(f"{prod_ver}: {deps[dependency]}")
-        
-        if other_versions:
-            answer_parts.append(f"\nFor comparison, other versions:")
-            answer_parts.extend([f"• {ver}" for ver in other_versions[:3]])
-        
-        # Add installation/configuration hint
-        if dependency.lower() in ['python', 'node.js', 'nodejs']:
-            answer_parts.append(f"\nEnsure you have {dependency} {dep_version} or compatible version installed before proceeding with {product} {version} installation.")
-        elif dependency.lower() in ['mongodb', 'redis', 'rabbitmq']:
-            answer_parts.append(f"\nThis {dependency} version should be configured and running before starting {product} {version}.")
-        
-        return '\n'.join(answer_parts)
-
-    def _create_general_requirements_answer(self, product: str, version: str, 
-                                          dependencies: Dict, full_matrix: Dict) -> str:
-        """Create general requirements answer."""
-        answer_parts = [
-            f"System requirements for {product} {version}:"
-        ]
-        
-        # List all dependencies
-        dep_list = []
-        for dep_name, dep_version in dependencies.items():
-            dep_list.append(f"• {dep_name.title()}: {dep_version}")
-        
-        if dep_list:
-            answer_parts.extend(dep_list)
-        else:
-            answer_parts.append("• No specific dependency versions documented in this source")
-        
-        answer_parts.append(f"\nEnsure all dependencies are installed and configured before deploying {product} {version}.")
-        
-        return '\n'.join(answer_parts)
-
-    def create_optimized_vector_store(self) -> Optional[Chroma]:
-        """Create optimized vector store for fast technical queries."""
-        try:
-            if not self.data_file.exists():
-                raise FileNotFoundError(f"Data file {self.data_file} not found. Run technical scraper first.")
-
-            logger.info("Loading comprehensive technical documentation...")
-            documents: List[Dict[str, Any]] = []
-            
-            with open(self.data_file, "r", encoding="utf-8") as f:
-                for line_num, line in enumerate(f, 1):
-                    if line.strip():
-                        try:
-                            doc_data = json.loads(line)
-                            documents.append(doc_data)
-                        except json.JSONDecodeError as e:
-                            logger.warning(f"Skipping malformed JSON on line {line_num}: {e}")
-
-            logger.info(f"Loaded {len(documents)} technical documents")
-
-            # Process documents to create comprehensive Q&A pairs
-            logger.info("Creating comprehensive technical Q&A pairs...")
-            all_qa_documents: List[Document] = []
-            
-            technical_stats = {
-                'dependency_docs': 0,
-                'version_docs': 0, 
-                'qa_pairs_created': 0,
-                'products_found': set(),
-                'dependencies_found': set()
-            }
-            
-            for doc_idx, doc_data in enumerate(documents):
-                try:
-                    content_type = doc_data.get('content_type', 'general')
-                    
-                    # Process technical documents
-                    if content_type in ['dependencies', 'version_lifecycle', 'installation_config']:
-                        qa_docs = self.create_comprehensive_qa_pairs(doc_data)
-                        all_qa_documents.extend(qa_docs)
-                        
-                        # Track statistics
-                        if content_type == 'dependencies':
-                            technical_stats['dependency_docs'] += 1
-                        elif content_type == 'version_lifecycle':
-                            technical_stats['version_docs'] += 1
-                        
-                        technical_stats['qa_pairs_created'] += len(qa_docs)
-                        
-                        # Track products and dependencies found
-                        extracted_versions = doc_data.get('extracted_versions', {})
-                        for product in extracted_versions.keys():
-                            technical_stats['products_found'].add(product)
-                        
-                        dependency_info = doc_data.get('dependency_info', {})
-                        for dep in dependency_info.keys():
-                            technical_stats['dependencies_found'].add(dep)
-                        
-                        if len(qa_docs) > 0:
-                            logger.info(f"Created {len(qa_docs)} Q&A pairs from {doc_data.get('title', 'Unknown')[:50]}")
-                    
-                    # Also create general content chunks for comprehensive coverage
-                    elif doc_data.get('technical_relevance_score', 0) > 5.0:
-                        general_chunks = self._create_general_technical_chunks(doc_data)
-                        all_qa_documents.extend(general_chunks)
-                    
-                    if len(all_qa_documents) % 100 == 0:
-                        logger.info(f"Processed {len(all_qa_documents)} Q&A pairs so far...")
-                        
-                except Exception as e:
-                    logger.error(f"Error processing document {doc_idx}: {e}")
-                    continue
-
-            if not all_qa_documents:
-                raise ValueError("No Q&A pairs created from technical documents")
-
-            # Log comprehensive statistics
-            logger.info("Technical Processing Summary:")
-            logger.info(f"  📊 Total Q&A pairs created: {technical_stats['qa_pairs_created']}")
-            logger.info(f"  📋 Dependency documents: {technical_stats['dependency_docs']}")
-            logger.info(f"  📅 Version documents: {technical_stats['version_docs']}")
-            logger.info(f"  🏷️ Products found: {sorted(technical_stats['products_found'])}")
-            logger.info(f"  🔧 Dependencies found: {sorted(technical_stats['dependencies_found'])}")
-
-            # Prioritize Q&A pairs for optimal retrieval
-            critical_qa = [doc for doc in all_qa_documents 
-                          if doc.metadata.get('priority') == 'critical']
-            high_qa = [doc for doc in all_qa_documents 
-                      if doc.metadata.get('priority') == 'high']
-            other_qa = [doc for doc in all_qa_documents 
-                       if doc.metadata.get('priority') not in ['critical', 'high']]
-            
-            logger.info(f"Q&A Priority Distribution:")
-            logger.info(f"  🚨 Critical: {len(critical_qa)} pairs")
-            logger.info(f"  ⚡ High: {len(high_qa)} pairs")
-            logger.info(f"  📄 Other: {len(other_qa)} pairs")
-
-            # Create optimized vector store
-            logger.info("Creating optimized technical vector database...")
-            
-            batch_size = 25
-            vector_store: Optional[Chroma] = None
-            
-            # Process in priority order
-            all_qa_ordered = critical_qa + high_qa + other_qa
-            
-            for i in range(0, len(all_qa_ordered), batch_size):
-                batch = all_qa_ordered[i:i + batch_size]
-                
-                try:
-                    if vector_store is None:
-                        vector_store = Chroma.from_documents(
-                            documents=batch,
-                            embedding=self.embeddings,
-                            persist_directory="./technical_optimized_chroma_db"
-                        )
-                        logger.info(f"Created technical vector store with first batch of {len(batch)} Q&A pairs")
-                    else:
-                        vector_store.add_documents(batch)
-                        
-                    logger.info(f"Processed {min(i + batch_size, len(all_qa_ordered))}/{len(all_qa_ordered)} Q&A pairs")
-                    time.sleep(0.3)  # Brief pause between batches
-                    
-                except Exception as e:
-                    logger.error(f"Error processing batch {i//batch_size + 1}: {e}")
-                    continue
-
-            logger.info("✅ Technical optimized vector database created successfully!")
-            
-            # Comprehensive testing
-            logger.info("🧪 Testing technical query performance...")
-            test_results = self._test_technical_queries(vector_store)
-            
-            return vector_store
-
-        except Exception as e:
-            logger.error(f"Error creating technical vector store: {str(e)}")
-            raise
-
-    def _create_general_technical_chunks(self, doc_data: Dict[str, Any]) -> List[Document]:
-        """Create general technical chunks for comprehensive coverage."""
+    def _create_adapter_config_chunks(self) -> List[Document]:
+        """Create adapter configuration chunks."""
         chunks = []
+        adapter_docs = self.content_categories['adapter_configs']
         
-        url = doc_data.get('url', 'unknown')
-        title = doc_data.get('title', 'Untitled')
-        searchable_text = doc_data.get('searchable_text', '')
-        
-        if len(searchable_text) > 1000:
-            # Split into chunks
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=800,
-                chunk_overlap=100
-            )
+        for doc in adapter_docs:
+            title = doc.get('title', '')
+            content = doc.get('searchable_text', '') or doc.get('raw_text', '')
             
-            text_chunks = splitter.split_text(searchable_text)
-            
-            for i, chunk in enumerate(text_chunks):
+            # Extract adapter configurations
+            if any(adapter in title.lower() for adapter in ['ldap', 'email', 'local aaa', 'adapter']):
+                
+                # Create adapter overview chunk
+                adapter_overview = f"""
+{title} Configuration Guide:
+
+{content[:1000]}...
+
+Key Configuration Areas:
+- Service Configuration (properties)
+- Broker Configuration
+- Authentication Settings
+- Connection Parameters
+"""
+                
                 chunks.append(Document(
-                    page_content=chunk,
+                    page_content=adapter_overview,
                     metadata={
-                        "source": url,
+                        "source": doc.get('url', 'unknown'),
                         "title": title,
-                        "content_type": "technical_content",
-                        "chunk_id": i,
-                        "priority": "medium"
+                        "content_type": "adapter_config",
+                        "category": "adapter_configuration"
+                    }
+                ))
+                
+                # Extract JSON configurations
+                code_blocks = doc.get('code_blocks', [])
+                for code_block in code_blocks:
+                    code_content = code_block.get('content', '')
+                    if code_content.strip().startswith('{') and len(code_content) > 50:
+                        chunks.append(Document(
+                            page_content=f"{title} Configuration Example:\n{code_content}",
+                            metadata={
+                                "source": doc.get('url', 'unknown'),
+                                "content_type": "adapter_json_config",
+                                "category": "adapter_configuration"
+                            }
+                        ))
+        
+        logger.info(f"Created {len(chunks)} adapter configuration chunks")
+        return chunks
+
+    def _create_automation_studio_chunks(self) -> List[Document]:
+        """Create Automation Studio chunks."""
+        chunks = []
+        automation_docs = self.content_categories['automation_studio']
+        
+        for doc in automation_docs:
+            content = doc.get('searchable_text', '') or doc.get('raw_text', '')
+            title = doc.get('title', '')
+            
+            # Search Object Attributes
+            if 'search object attributes' in content.lower() or 'formdata' in content.lower():
+                search_attributes_content = f"""
+Automation Studio Search Object Attributes:
+
+{content}
+
+Key Concepts:
+- formData object contains form input data
+- Use query task to access formData fields
+- Field labels are converted to camelCase (FirstName becomes firstName)
+- formData must be added manually as job variable
+- Access with Reference Variable: formData (case-sensitive)
+
+Example Usage:
+- Form field "FirstName" becomes formData.firstName
+- Form field "LastName" becomes formData.lastName
+- Query tasks can extract specific form values for workflow processing
+"""
+                
+                chunks.append(Document(
+                    page_content=search_attributes_content,
+                    metadata={
+                        "source": doc.get('url', 'unknown'),
+                        "title": title,
+                        "content_type": "automation_studio",
+                        "category": "search_object_attributes",
+                        "priority": "high"
                     }
                 ))
         
+        logger.info(f"Created {len(chunks)} Automation Studio chunks")
         return chunks
 
-    def _test_technical_queries(self, vector_store: Chroma) -> Dict[str, Any]:
-        """Test the vector store with technical queries."""
+    def _create_servicenow_chunks(self) -> List[Document]:
+        """Create ServiceNow application component chunks."""
+        chunks = []
+        servicenow_docs = self.content_categories['servicenow_components']
+        
+        for doc in servicenow_docs:
+            content = doc.get('searchable_text', '') or doc.get('raw_text', '')
+            title = doc.get('title', '')
+            
+            if 'servicenow' in content.lower():
+                servicenow_content = f"""
+ServiceNow Integration with Itential:
+
+{title}
+
+Content: {content}
+
+ServiceNow Application Components typically include:
+- Incident Management
+- Service Catalog
+- Configuration Management Database (CMDB)
+- Change Management
+- Problem Management
+- Service Portal
+- Workflow Engine
+- Business Rules
+- Script Includes
+- UI Actions
+"""
+                
+                chunks.append(Document(
+                    page_content=servicenow_content,
+                    metadata={
+                        "source": doc.get('url', 'unknown'),
+                        "title": title,
+                        "content_type": "servicenow_integration",
+                        "category": "servicenow_components"
+                    }
+                ))
+        
+        logger.info(f"Created {len(chunks)} ServiceNow chunks")
+        return chunks
+
+    def _create_code_example_chunks(self) -> List[Document]:
+        """Create code example chunks."""
+        chunks = []
+        
+        # Process all documents for code blocks
+        for category_docs in self.content_categories.values():
+            for doc in category_docs:
+                code_blocks = doc.get('code_blocks', [])
+                for code_block in code_blocks:
+                    content = code_block.get('content', '')
+                    context = code_block.get('context', '')
+                    code_type = code_block.get('code_type', 'Code')
+                    
+                    if len(content.strip()) > 20:  # Meaningful code only
+                        code_chunk = f"""
+{code_type} Example:
+Context: {context}
+
+{content}
+
+Code Type: {code_type}
+Language: {code_block.get('language', 'Unknown')}
+Technical Relevance: {code_block.get('technical_relevance', 'Medium')}
+"""
+                        
+                        chunks.append(Document(
+                            page_content=code_chunk,
+                            metadata={
+                                "source": doc.get('url', 'unknown'),
+                                "title": doc.get('title', 'Unknown'),
+                                "content_type": "code_example",
+                                "code_type": code_type,
+                                "language": code_block.get('language', 'unknown')
+                            }
+                        ))
+        
+        logger.info(f"Created {len(chunks)} code example chunks")
+        return chunks
+
+    def _create_procedure_chunks(self) -> List[Document]:
+        """Create procedure and troubleshooting chunks."""
+        chunks = []
+        procedure_docs = (self.content_categories['procedures'] + 
+                         self.content_categories['troubleshooting'])
+        
+        for doc in procedure_docs:
+            content = doc.get('searchable_text', '') or doc.get('raw_text', '')
+            title = doc.get('title', '')
+            
+            # Look for step-by-step procedures
+            if any(indicator in content.lower() for indicator in ['step 1', 'step 2', 'navigate to', 'procedure']):
+                
+                # Enhanced chunking for procedures
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=2000,
+                    chunk_overlap=400,
+                    separators=['\n\n', '\n', '. ', ' ']
+                )
+                
+                procedure_chunks = splitter.split_text(content)
+                
+                for i, chunk in enumerate(procedure_chunks):
+                    enhanced_chunk = f"""
+{title} - Procedure Part {i+1}:
+
+{chunk}
+
+Document Type: Technical Procedure
+Source: {doc.get('url', 'unknown')}
+"""
+                    
+                    chunks.append(Document(
+                        page_content=enhanced_chunk,
+                        metadata={
+                            "source": doc.get('url', 'unknown'),
+                            "title": title,
+                            "content_type": "procedure",
+                            "category": "technical_procedure",
+                            "part": i+1
+                        }
+                    ))
+        
+        logger.info(f"Created {len(chunks)} procedure chunks")
+        return chunks
+
+    def _create_general_technical_chunks(self, documents: List[Dict]) -> List[Document]:
+        """Create general technical chunks for comprehensive coverage."""
+        chunks = []
+        
+        for doc in documents:
+            if doc.get('technical_relevance_score', 0) > 3:
+                content = doc.get('searchable_text', '') or doc.get('raw_text', '')
+                if len(content) > 300:
+                    
+                    # Enhanced chunking
+                    splitter = RecursiveCharacterTextSplitter(
+                        chunk_size=1800,
+                        chunk_overlap=300,
+                        separators=['\n\n', '\n', '. ', ' ']
+                    )
+                    
+                    text_chunks = splitter.split_text(content)
+                    
+                    for i, chunk in enumerate(text_chunks):
+                        enhanced_chunk = f"""
+{doc.get('title', 'Technical Content')}:
+
+{chunk}
+
+Technical Score: {doc.get('technical_relevance_score', 0)}
+Content Type: {doc.get('content_type', 'general')}
+"""
+                        
+                        chunks.append(Document(
+                            page_content=enhanced_chunk,
+                            metadata={
+                                "source": doc.get('url', 'unknown'),
+                                "title": doc.get('title', 'Untitled'),
+                                "content_type": "general_technical",
+                                "technical_score": doc.get('technical_relevance_score', 0),
+                                "chunk_id": i
+                            }
+                        ))
+        
+        logger.info(f"Created {len(chunks)} general technical chunks")
+        return chunks
+
+    def _is_dependency_table(self, table: Dict) -> bool:
+        """Check if table contains dependency information."""
+        headers = table.get('headers', [])
+        content = ' '.join(str(h) for h in headers).lower()
+        
+        dependency_indicators = ['mongodb', 'redis', 'rabbitmq', 'python', 'node', 'version', 'platform', 'iap']
+        return sum(1 for indicator in dependency_indicators if indicator in content) >= 2
+
+    def _process_dependency_table(self, table: Dict, doc: Dict) -> List[Document]:
+        """Process dependency table into chunks."""
+        chunks = []
+        
+        # Create table overview chunk
+        table_content = f"""
+Dependency Table from {doc.get('title', 'Unknown')}:
+
+{table.get('markdown', '')}
+
+Context: {table.get('context_before', '')}
+Additional Info: {table.get('context_after', '')}
+"""
+        
+        chunks.append(Document(
+            page_content=table_content,
+            metadata={
+                "source": doc.get('url', 'unknown'),
+                "content_type": "dependency_table",
+                "category": "dependencies"
+            }
+        ))
+        
+        # Extract specific dependencies
+        headers = table.get('headers', [])
+        rows = table.get('rows', [])
+        
+        if headers and rows:
+            # Find product column
+            product_col = None
+            for i, header in enumerate(headers):
+                if any(term in str(header).lower() for term in ['platform', 'version', 'iap']):
+                    product_col = i
+                    break
+            
+            if product_col is not None:
+                for row in rows:
+                    if len(row) > product_col:
+                        product = str(row[product_col])
+                        if product and len(product) > 1:
+                            # Create product-specific chunk
+                            product_deps = ' | '.join(str(cell) for cell in row)
+                            product_chunk = f"Product: {product}\nDependencies: {product_deps}"
+                            
+                            chunks.append(Document(
+                                page_content=product_chunk,
+                                metadata={
+                                    "source": doc.get('url', 'unknown'),
+                                    "content_type": "product_dependency",
+                                    "product": product
+                                }
+                            ))
+        
+        return chunks
+
+    def _test_comprehensive_system(self, vector_store) -> None:
+        """Test comprehensive system with diverse queries."""
+        logger.info("Testing Comprehensive System...")
+        
         test_queries = [
-            # Version-specific queries
-            "What version of Node.js is required for IAP 2023.2?",
-            "Python requirements for IAP 2023.1",
-            "What MongoDB version does IAP 2023.2 need?",
-            "Redis version for IAG 2023.1",
+            # Dependency queries
+            "What version of Redis is required for IAP 2023.2?",
+            "MongoDB version for IAP 2023.2",
             
-            # General product queries
-            "What are the system requirements for IAP 2023.2?",
-            "Dependencies for Platform 6",
-            "Show me IAP 2023.1 prerequisites",
+            # Migration script queries
+            "How to run database migration script?",
+            "migratePropertiesToDatabase.js command example",
             
-            # Version listing queries
-            "What versions of IAP are available?",
-            "List all IAG versions",
-            "Show me Platform versions"
+            # Adapter configuration queries
+            "LDAP adapter configuration example",
+            "Email adapter JSON configuration",
+            "Local AAA adapter setup",
+            
+            # Automation Studio queries
+            "What are Search Object Attributes in Automation Studio?",
+            "How to access formData in workflow?",
+            "Form data query task example",
+            
+            # ServiceNow queries
+            "ServiceNow Application Components",
+            "ServiceNow integration with Itential",
+            
+            # Code and procedure queries
+            "Adapter installation steps",
+            "Troubleshooting adapter connectivity"
         ]
         
-        results = {}
+        success_count = 0
+        category_coverage = {
+            'dependencies': 0,
+            'migration': 0,
+            'adapters': 0,
+            'automation_studio': 0,
+            'servicenow': 0,
+            'procedures': 0
+        }
         
         for query in test_queries:
             try:
-                search_results = vector_store.similarity_search_with_score(query, k=3)
-                
-                if search_results:
-                    best_result = search_results[0]
-                    doc, score = best_result
+                results = vector_store.similarity_search(query, k=5)
+                if results:
+                    success_count += 1
                     
-                    # Check if it's a relevant technical result
-                    metadata = doc.metadata
-                    is_technical = metadata.get('content_type') in ['technical_qa', 'version_qa']
-                    has_product = 'product' in metadata
-                    has_version = 'product_version' in metadata or 'available_versions' in metadata
+                    # Check category coverage
+                    if 'redis' in query.lower() or 'mongodb' in query.lower():
+                        category_coverage['dependencies'] += 1
+                    elif 'migration' in query.lower():
+                        category_coverage['migration'] += 1
+                    elif 'adapter' in query.lower():
+                        category_coverage['adapters'] += 1
+                    elif 'automation studio' in query.lower() or 'formdata' in query.lower():
+                        category_coverage['automation_studio'] += 1
+                    elif 'servicenow' in query.lower():
+                        category_coverage['servicenow'] += 1
+                    else:
+                        category_coverage['procedures'] += 1
                     
-                    results[query] = {
-                        'score': score,
-                        'is_technical': is_technical,
-                        'has_product_info': has_product,
-                        'has_version_info': has_version,
-                        'content_preview': doc.page_content[:100] + "...",
-                        'metadata': {k: v for k, v in metadata.items() if k in ['product', 'product_version', 'dependency']}
-                    }
-                    
-                    logger.info(f"✅ '{query}' -> Score: {score:.3f}, Technical: {is_technical}, Product: {has_product}")
+                    logger.info(f"PASS: '{query}' - Found relevant content")
                 else:
-                    results[query] = {'score': 0, 'found': False}
-                    logger.warning(f"❌ '{query}' -> No results found")
+                    logger.warning(f"FAIL: '{query}' - No results found")
                     
             except Exception as e:
-                logger.error(f"Error testing query '{query}': {e}")
-                results[query] = {'error': str(e)}
+                logger.error(f"ERROR: '{query}' - {e}")
         
-        # Summary statistics
-        successful_queries = sum(1 for r in results.values() if r.get('score', 0) > 0)
-        technical_queries = sum(1 for r in results.values() if r.get('is_technical', False))
+        success_rate = success_count / len(test_queries) * 100
+        logger.info(f"Test Results: {success_count}/{len(test_queries)} successful ({success_rate:.1f}%)")
+        logger.info(f"Category Coverage: {category_coverage}")
         
-        logger.info(f"🧪 Test Results Summary:")
-        logger.info(f"  ✅ Successful queries: {successful_queries}/{len(test_queries)}")
-        logger.info(f"  🎯 Technical responses: {technical_queries}/{len(test_queries)}")
-        
-        return results
+        if success_rate >= 80:
+            logger.info("Comprehensive system test PASSED!")
+        else:
+            logger.warning("Comprehensive system needs improvement")
 
-def main() -> None:
-    """Main function to create technical optimized vector store."""
-    embedder = TechnicalDocumentationEmbedder("complete_technical_docs.jsonl")
+def main():
+    """Main function to create the comprehensive system."""
+    logger.info("COMPREHENSIVE TECHNICAL DOCUMENTATION EMBEDDER")
+    logger.info("=" * 80)
     
-    # Remove existing database
-    import shutil
-    db_path = Path("./technical_optimized_chroma_db")
-    if db_path.exists():
-        shutil.rmtree(db_path)
-        logger.info("Removed existing technical vector database")
+    embedder = ComprehensiveTechnicalEmbedder("complete_technical_docs.jsonl")
+    vector_store = embedder.create_comprehensive_system()
     
-    # Create optimized vector store
-    vector_store = embedder.create_optimized_vector_store()
+    logger.info("\nCOMPREHENSIVE SYSTEM COMPLETE!")
+    logger.info("=" * 80)
+    logger.info(f"Database created: {embedder.db_path}")
     
-    if vector_store:
-        logger.info("🎉 Technical optimized RAG system ready!")
-        logger.info("Database path: ./technical_optimized_chroma_db")
-        logger.info("")
-        logger.info("📋 Update your chatbot configuration:")
-        logger.info("   qa_db_path='./technical_optimized_chroma_db'")
-        logger.info("")
-        logger.info("🧪 Test queries:")
-        logger.info("   • 'What Node.js version is required for IAP 2023.2?'")
-        logger.info("   • 'Python requirements for IAP 2023.1'")
-        logger.info("   • 'What versions of IAP are available?'")
-        logger.info("   • 'MongoDB version for Platform 6'")
+    # Show content breakdown
+    total_content = sum(len(docs) for docs in embedder.content_categories.values())
+    logger.info(f"Total content processed: {total_content} documents")
+    logger.info("\nContent breakdown:")
+    for category, docs in embedder.content_categories.items():
+        if docs:
+            logger.info(f"  {category}: {len(docs)} documents")
+    
+    logger.info("\nYour AI can now answer comprehensive questions about:")
+    logger.info("- Database Migration Scripts and commands")
+    logger.info("- Adapter configurations (LDAP, Email, Local AAA, etc.)")
+    logger.info("- Automation Studio features and Search Object Attributes")
+    logger.info("- ServiceNow Application Components")
+    logger.info("- Code examples and JSON configurations")
+    logger.info("- Step-by-step procedures and troubleshooting")
+    logger.info("- Network configurations and dependencies")
 
 if __name__ == "__main__":
     main()
