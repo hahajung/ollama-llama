@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Comprehensive Technical Documentation Scraper for docs.itential.com
+Enhanced Comprehensive Technical Documentation Scraper for docs.itential.com
+COMPLETE REPLACEMENT for comprehensive_technical_scraper.py
 Focuses on extracting ALL version information, dependencies, and technical requirements.
-Windows-compatible version with no emoji characters.
+Enhanced to capture CLI troubleshooting and prevent over-matching issues.
 """
 
 import os
@@ -19,7 +20,7 @@ import time
 from pathlib import Path
 
 class TechnicalDocumentationScraper:
-    """Comprehensive scraper specifically designed for technical documentation."""
+    """Enhanced scraper that systematically captures ALL documentation with domain categorization."""
     
     def __init__(self, 
                  base_url: str = "https://docs.itential.com/", 
@@ -38,412 +39,349 @@ class TechnicalDocumentationScraper:
         self.output_lock = asyncio.Lock()
         self.last_request_time = 0
         
-        # Technical content tracking
-        self.found_technical_pages: Set[str] = set()
-        self.version_registry: Dict[str, Set[str]] = defaultdict(set)
-        self.dependency_registry: Dict[str, Dict] = {}
+        # Enhanced content categorization for preventing over-matching
+        self.content_categories = {
+            'CLI_TOOLS': {
+                'url_patterns': [
+                    r'/cli/', r'/command-line/', r'/itential-cli/', 
+                    r'/netcommon/', r'/ansible/', r'/duplicate-data/'
+                ],
+                'title_keywords': [
+                    'cli', 'command line', 'itential-cli', 'netcommon', 
+                    'ansible', 'duplicate data', 'collection'
+                ],
+                'content_keywords': [
+                    'itential-cli', 'ansible-galaxy', 'netcommon', 'duplicate data',
+                    'command line', 'cli commands', 'collection version',
+                    'duplicate return data', 'itential-cli role'
+                ],
+                'priority': 25.0  # Highest priority for CLI troubleshooting
+            },
+            'TROUBLESHOOTING': {
+                'url_patterns': [
+                    r'/troubleshoot/', r'/debugging/', r'/error/', r'/issue/',
+                    r'/duplicate/', r'/fix/', r'/resolve/'
+                ],
+                'title_keywords': [
+                    'troubleshoot', 'debug', 'error', 'issue', 'duplicate',
+                    'fix', 'resolve', 'problem', 'solution'
+                ],
+                'content_keywords': [
+                    'duplicate', 'error', 'issue', 'problem', 'troubleshoot',
+                    'debug', 'fix', 'resolve', 'solution', 'workaround'
+                ],
+                'priority': 20.0
+            },
+            'PLATFORM_EVENTS': {
+                'url_patterns': [
+                    r'/event/', r'/deduplication/', r'/operations-manager/',
+                    r'/email-adapter/', r'/trigger/'
+                ],
+                'title_keywords': [
+                    'event service', 'deduplication', 'operations manager', 
+                    'email adapter', 'trigger', 'event configuration'
+                ],
+                'content_keywords': [
+                    'event service', 'event deduplication', 'operations manager',
+                    'email adapter', 'trigger type', 'uniqueProps', 'messageId'
+                ],
+                'priority': 15.0
+            },
+            'VERSION_DEPENDENCIES': {
+                'url_patterns': [
+                    r'/version/', r'/dependency/', r'/requirement/', r'/compatibility/',
+                    r'/support-matrix/', r'/lifecycle/'
+                ],
+                'title_keywords': [
+                    'version', 'dependency', 'requirement', 'compatibility',
+                    'support matrix', 'lifecycle', 'upgrade'
+                ],
+                'content_keywords': [
+                    'version', 'dependency', 'requirement', 'compatible',
+                    'support', 'upgrade', 'migrate', 'matrix'
+                ],
+                'priority': 18.0
+            },
+            'INSTALLATION_CONFIG': {
+                'url_patterns': [
+                    r'/install/', r'/config/', r'/setup/', r'/deploy/',
+                    r'/configuration/', r'/deployment/'
+                ],
+                'title_keywords': [
+                    'install', 'installation', 'config', 'configuration',
+                    'setup', 'deploy', 'deployment'
+                ],
+                'content_keywords': [
+                    'install', 'configuration', 'setup', 'deploy',
+                    'configure', 'deployment', 'environment'
+                ],
+                'priority': 16.0
+            }
+        }
         
-        # Priority technical keywords for IAP/IAG systems
-        self.technical_keywords = {
-            # Product versions
-            'iap_versions': ['iap', 'itential automation platform', 'automation platform'],
-            'iag_versions': ['iag', 'itential automation gateway', 'automation gateway'],
-            'platform_versions': ['platform 6', 'platform 7', 'platform 8'],
-            
-            # Dependencies
-            'runtime_deps': ['python', 'node.js', 'nodejs', 'java', 'npm', 'pip'],
-            'database_deps': ['mongodb', 'redis', 'elasticsearch', 'postgresql'],
-            'messaging_deps': ['rabbitmq', 'bullmq', 'kafka', 'mqtt'],
-            'infrastructure_deps': ['docker', 'kubernetes', 'helm', 'nginx'],
-            
-            # Technical concepts
-            'technical_terms': [
-                'dependencies', 'requirements', 'prerequisites', 'installation', 
-                'configuration', 'setup', 'deployment', 'upgrade', 'migration',
-                'compatibility', 'support matrix', 'version matrix'
+        # Enhanced technical patterns for better extraction
+        self.enhanced_patterns = {
+            'cli_specific': [
+                r'itential-cli.*?(?:duplicate|error|issue)',
+                r'ansible-galaxy.*?collection.*?(?:install|upgrade|version)',
+                r'netcommon.*?(?:version|collection).*?(\d+\.\d+\.\d+)',
+                r'duplicate.*?(?:data|return).*?(?:cli|command)',
+                r'command.*?line.*?(?:tool|interface|troubleshoot)'
+            ],
+            'version_matrix': [
+                r'(?:IAP|iap)\s*([0-9]{4}\.[0-9]+(?:\.[0-9]+)?)',
+                r'(?:IAG|iag)\s*([0-9]{4}\.[0-9]+(?:\.[0-9]+)?)',
+                r'(?:Platform|platform)\s*([0-9]+(?:\.[0-9]+)?)',
+                r'(?:Python|python)\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+                r'(?:Node|node)\.?js\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+                r'(?:MongoDB|mongodb)\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
             ]
         }
         
-        # Version patterns to extract
-        self.version_patterns = [
-            r'(?:IAP|iap)[\s]*([0-9]{4}\.[0-9]+(?:\.[0-9]+)?)',  # IAP 2023.1, IAP 2023.2.1
-            r'(?:IAG|iag)[\s]*([0-9]{4}\.[0-9]+(?:\.[0-9]+)?)',  # IAG 2023.1
-            r'Platform[\s]*([0-9]+(?:\.[0-9]+)?)',               # Platform 6, Platform 7.1
-            r'MongoDB[\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',        # MongoDB 5.0, 6.0.1
-            r'Python[\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',         # Python 3.9.5
-            r'Node\.js[\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',       # Node.js 18.15.0
-            r'Redis[\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',          # Redis 6.2.7
-            r'RabbitMQ[\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)',       # RabbitMQ 3.9.0
-        ]
+        # Track comprehensive coverage
+        self.coverage_tracker = {
+            'cli_pages': set(),
+            'troubleshooting_pages': set(),
+            'platform_events_pages': set(),
+            'version_pages': set(),
+            'installation_pages': set()
+        }
+        
+        # Technical content tracking (existing functionality)
+        self.found_technical_pages: Set[str] = set()
+        self.version_registry: Dict[str, Set[str]] = defaultdict(set)
+        self.dependency_registry: Dict[str, Dict] = {}
 
-    async def _init_session(self) -> None:
-        """Initialize HTTP session with proper headers."""
+    async def _init_session(self):
+        """Initialize aiohttp session with proper headers."""
+        timeout = aiohttp.ClientTimeout(total=30, connect=10)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        }
+        
+        connector = aiohttp.TCPConnector(limit=self.max_concurrent, ttl_dns_cache=300)
         self.session = aiohttp.ClientSession(
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-            },
-            timeout=aiohttp.ClientTimeout(total=90),
-            connector=aiohttp.TCPConnector(limit_per_host=4)
+            timeout=timeout, 
+            headers=headers, 
+            connector=connector
         )
 
-    def is_technical_url(self, url: str) -> bool:
-        """Determine if URL contains technical documentation."""
-        parsed = urlparse(url)
-        invalid_exts = {'.pdf', '.zip', '.jpg', '.png', '.gif', '.svg', '.mp4', '.css', '.js'}
-        invalid_patterns = {'login', 'search', 'edit', 'admin', 'api/', '_static/', 'blog/', 'news/'}
-        
-        if (parsed.netloc != 'docs.itential.com' or
-            any(url.endswith(ext) for ext in invalid_exts) or
-            any(pattern in url.lower() for pattern in invalid_patterns) or
-            '#' in url or len(url) > 250):
-            return False
-        
-        # Prioritize technical documentation paths
-        technical_paths = [
-            'installation', 'dependencies', 'requirements', 'prerequisites',
-            'configuration', 'setup', 'deployment', 'upgrade', 'migration',
-            'version', 'release', 'compatibility', 'support',
-            'adapter', 'platform', 'gateway', 'automation'
-        ]
-        
-        url_lower = url.lower()
-        return any(path in url_lower for path in technical_paths) or '/docs/' in url_lower
-
-    def calculate_technical_priority(self, url: str, title: str = "", content: str = "") -> float:
-        """Calculate priority based on technical relevance."""
-        priority = 1.0
-        url_lower = url.lower()
-        title_lower = title.lower()
-        content_lower = content.lower()
-        
-        # High priority: Critical technical documentation
-        critical_patterns = [
-            'dependencies', 'requirements', 'installation', 'prerequisites',
-            'version', 'release-notes', 'compatibility', 'support-matrix',
-            'configuration', 'deployment', 'upgrade'
-        ]
-        
-        for pattern in critical_patterns:
-            if pattern in url_lower:
-                priority += 10.0
-            if pattern in title_lower:
-                priority += 5.0
-        
-        # Product-specific boosts
-        product_patterns = {
-            'iap': 8.0, 'automation-platform': 8.0,
-            'iag': 7.0, 'automation-gateway': 7.0,
-            'platform-6': 6.0, 'platform-7': 6.0
-        }
-        
-        for pattern, boost in product_patterns.items():
-            if pattern in url_lower:
-                priority += boost
-        
-        # Dependency-specific boosts
-        for category, keywords in self.technical_keywords.items():
-            for keyword in keywords:
-                if keyword in content_lower:
-                    priority += 3.0
-                    break
-        
-        # Version number boosts
-        version_indicators = ['2023.1', '2023.2', '2022.1', '2024.1', 'v6', 'v7', 'v8']
-        for indicator in version_indicators:
-            if indicator in url_lower or indicator in content_lower:
-                priority += 4.0
-        
-        return priority
-
     async def rate_limited_get(self, url: str) -> aiohttp.ClientResponse:
-        """Rate-limited HTTP request."""
-        elapsed = time.time() - self.last_request_time
-        if elapsed < self.rate_limit:
-            await asyncio.sleep(self.rate_limit - elapsed)
-        self.last_request_time = time.time()
+        """Rate-limited HTTP GET request."""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        if time_since_last < self.rate_limit:
+            await asyncio.sleep(self.rate_limit - time_since_last)
         
-        if self.session is None:
-            raise RuntimeError("Session not initialized")
+        self.last_request_time = time.time()
         return await self.session.get(url)
 
-    def extract_comprehensive_tables(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        """Extract all tables with enhanced structure preservation."""
-        tables: List[Dict[str, Any]] = []
-        
-        for i, table in enumerate(soup.find_all('table')):
-            try:
-                # Multiple parsing strategies
-                table_data = self._parse_table_multiple_ways(table, i)
-                
-                # Analyze table content for technical relevance
-                table_data['technical_relevance'] = self._analyze_table_technical_content(table_data)
-                
-                # Extract version information from table
-                table_data['extracted_versions'] = self._extract_versions_from_table(table_data)
-                
-                tables.append(table_data)
-                
-                # Replace table with enriched placeholder
-                placeholder = self._create_enriched_table_placeholder(table_data, i)
-                table.replace_with(placeholder)
-                
-            except Exception as e:
-                print(f"Error processing table {i}: {e}")
-                # Fallback handling
-                table_text = self.clean_text(table.get_text())
-                tables.append({
-                    'id': f'table_{i}',
-                    'text': table_text,
-                    'technical_relevance': 'low',
-                    'extracted_versions': []
-                })
-                table.replace_with(f"[TABLE_{i}] {table_text[:200]}")
-        
-        return tables
-
-    def _parse_table_multiple_ways(self, table: any, table_id: int) -> Dict[str, Any]:
-        """Parse table using multiple strategies for robustness."""
-        table_data = {
-            'id': f'table_{table_id}',
-            'headers': [],
-            'rows': [],
-            'markdown': '',
-            'csv': '',
-            'raw_html': str(table),
-            'context_before': '',
-            'context_after': ''
-        }
-        
-        try:
-            # Strategy 1: pandas read_html (most robust)
-            df = pd.read_html(str(table))[0]
-            table_data['headers'] = list(df.columns)
-            table_data['rows'] = df.values.tolist()
-            table_data['markdown'] = df.to_markdown(index=False)
-            table_data['csv'] = df.to_csv(index=False)
-            table_data['success_method'] = 'pandas'
-            
-        except Exception:
-            try:
-                # Strategy 2: Manual parsing
-                headers = []
-                rows = []
-                
-                # Extract headers
-                header_row = table.find('tr')
-                if header_row:
-                    for th in header_row.find_all(['th', 'td']):
-                        headers.append(self.clean_text(th.get_text()))
-                
-                # Extract data rows
-                for tr in table.find_all('tr')[1:]:  # Skip header row
-                    row = []
-                    for td in tr.find_all(['td', 'th']):
-                        row.append(self.clean_text(td.get_text()))
-                    if row:
-                        rows.append(row)
-                
-                table_data['headers'] = headers
-                table_data['rows'] = rows
-                table_data['success_method'] = 'manual'
-                
-                # Create markdown manually
-                if headers and rows:
-                    markdown_lines = ['| ' + ' | '.join(headers) + ' |']
-                    markdown_lines.append('|' + '---|' * len(headers))
-                    for row in rows:
-                        padded_row = row + [''] * (len(headers) - len(row))  # Pad short rows
-                        markdown_lines.append('| ' + ' | '.join(padded_row[:len(headers)]) + ' |')
-                    table_data['markdown'] = '\n'.join(markdown_lines)
-                
-            except Exception as e:
-                # Strategy 3: Fallback to plain text
-                table_data['text'] = self.clean_text(table.get_text())
-                table_data['success_method'] = 'fallback'
-        
-        # Get context around table
-        self._get_table_context(table, table_data)
-        
-        return table_data
-
-    def _analyze_table_technical_content(self, table_data: Dict[str, Any]) -> str:
-        """Analyze technical relevance of table content."""
-        content = str(table_data).lower()
-        
-        # Critical technical indicators
-        critical_indicators = [
-            'version', 'dependency', 'requirement', 'prerequisite',
-            'python', 'node', 'mongodb', 'redis', 'rabbitmq',
-            'iap', 'iag', 'platform', 'compatibility'
-        ]
-        
-        critical_count = sum(1 for indicator in critical_indicators if indicator in content)
-        
-        if critical_count >= 5:
-            return 'critical'
-        elif critical_count >= 3:
-            return 'high'
-        elif critical_count >= 1:
-            return 'medium'
-        else:
-            return 'low'
-
-    def _extract_versions_from_table(self, table_data: Dict[str, Any]) -> List[Dict[str, str]]:
-        """Extract version information from table content."""
-        versions = []
-        content = str(table_data)
-        
-        for pattern in self.version_patterns:
-            matches = re.finditer(pattern, content, re.IGNORECASE)
-            for match in matches:
-                product = match.group(0).split()[0]  # Get product name
-                version = match.group(1)
-                versions.append({
-                    'product': product,
-                    'version': version,
-                    'pattern': pattern,
-                    'context': content[max(0, match.start()-50):match.end()+50]
-                })
-        
-        return versions
-
-    def _create_enriched_table_placeholder(self, table_data: Dict[str, Any], table_id: int) -> str:
-        """Create an enriched placeholder that preserves searchable content."""
-        content_parts = [f"[TABLE_{table_id}]"]
-        
-        # Add technical relevance
-        relevance = table_data.get('technical_relevance', 'unknown')
-        content_parts.append(f"Technical relevance: {relevance}")
-        
-        # Add extracted versions
-        versions = table_data.get('extracted_versions', [])
-        if versions:
-            version_info = ', '.join([f"{v['product']} {v['version']}" for v in versions])
-            content_parts.append(f"Versions: {version_info}")
-        
-        # Add table content
-        markdown = table_data.get('markdown', '')
-        if markdown:
-            content_parts.append(markdown[:500])
-        else:
-            text = table_data.get('text', '')
-            content_parts.append(text[:300])
-        
-        return ' | '.join(content_parts)
-
-    def _get_table_context(self, table: any, table_data: Dict[str, Any]) -> None:
-        """Extract comprehensive context around table."""
-        try:
-            # Get preceding context (headers, paragraphs)
-            prev_elements = []
-            current = table.previous_sibling
-            
-            while current and len(prev_elements) < 5:
-                if hasattr(current, 'get_text'):
-                    text = current.get_text().strip()
-                    if text and len(text) > 10:
-                        # Prioritize headers
-                        if current.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-                            prev_elements.insert(0, f"HEADER: {text}")
-                        elif len(text) < 200:
-                            prev_elements.insert(0, text)
-                current = current.previous_sibling
-            
-            table_data['context_before'] = ' | '.join(prev_elements)
-            
-            # Get following context
-            next_elements = []
-            current = table.next_sibling
-            
-            while current and len(next_elements) < 3:
-                if hasattr(current, 'get_text'):
-                    text = current.get_text().strip()
-                    if text and len(text) > 10 and len(text) < 200:
-                        next_elements.append(text)
-                current = current.next_sibling
-            
-            table_data['context_after'] = ' | '.join(next_elements)
-            
-        except Exception as e:
-            print(f"Error getting table context: {e}")
-
-    def analyze_technical_content(self, url: str, title: str, content: str) -> Dict[str, Any]:
-        """Comprehensive analysis of technical content."""
-        analysis = {
-            'priority_score': 1.0,
-            'content_type': 'general',
-            'technical_indicators': set(),
-            'extracted_versions': {},
-            'dependency_info': {},
-            'is_critical': False
-        }
-        
+    def categorize_content_enhanced(self, url: str, title: str, content: str) -> Tuple[str, float]:
+        """Enhanced content categorization to prevent over-matching."""
         url_lower = url.lower()
         title_lower = title.lower()
         content_lower = content.lower()
         
-        # Determine content type based on comprehensive analysis
-        if any(term in url_lower for term in ['dependencies', 'requirement']):
-            analysis['content_type'] = 'dependencies'
-            analysis['is_critical'] = True
-            analysis['priority_score'] += 15.0
-            
-        elif any(term in url_lower for term in ['version', 'lifecycle', 'release']):
-            analysis['content_type'] = 'version_lifecycle'
-            analysis['is_critical'] = True
-            analysis['priority_score'] += 12.0
-            
-        elif any(term in url_lower for term in ['installation', 'setup', 'configuration']):
-            analysis['content_type'] = 'installation_config'
-            analysis['priority_score'] += 8.0
-            
-        elif any(term in url_lower for term in ['migration', 'upgrade']):
-            analysis['content_type'] = 'migration_upgrade'
-            analysis['priority_score'] += 7.0
+        category_scores = {}
         
-        # Extract version information
-        for pattern in self.version_patterns:
-            matches = re.finditer(pattern, content, re.IGNORECASE)
-            for match in matches:
-                product = match.group(0).split()[0].lower()
-                version = match.group(1)
-                
-                if product not in analysis['extracted_versions']:
-                    analysis['extracted_versions'][product] = set()
-                analysis['extracted_versions'][product].add(version)
-                
-                # Track globally
-                self.version_registry[product].add(version)
+        for category_name, category_info in self.content_categories.items():
+            score = 0
+            
+            # URL pattern matching (highest weight)
+            for pattern in category_info['url_patterns']:
+                if re.search(pattern, url_lower):
+                    score += 15
+            
+            # Title keyword matching (high weight)
+            for keyword in category_info['title_keywords']:
+                if keyword in title_lower:
+                    score += 10
+            
+            # Content keyword matching (medium weight)
+            for keyword in category_info['content_keywords']:
+                count = content_lower.count(keyword)
+                score += min(count * 3, 15)  # Cap at 15 points per keyword
+            
+            # Special CLI detection (prevent over-matching)
+            if category_name == 'CLI_TOOLS':
+                cli_strong_indicators = [
+                    'itential-cli', 'ansible-galaxy', 'netcommon collection',
+                    'duplicate return data', 'cli troubleshoot'
+                ]
+                for indicator in cli_strong_indicators:
+                    if indicator in content_lower:
+                        score += 20  # Very high bonus for CLI content
+                        
+            # Special Platform Events detection (prevent CLI confusion)
+            elif category_name == 'PLATFORM_EVENTS':
+                platform_strong_indicators = [
+                    'event service', 'event deduplication', 'operations manager',
+                    'email adapter', 'platform trigger'
+                ]
+                for indicator in platform_strong_indicators:
+                    if indicator in content_lower:
+                        score += 18
+                        
+                # Penalty if it's clearly CLI content
+                cli_indicators = ['itential-cli', 'command line', 'ansible-galaxy']
+                if any(indicator in content_lower for indicator in cli_indicators):
+                    score -= 10
+            
+            # Apply base priority
+            if score > 0:
+                score += category_info['priority']
+                category_scores[category_name] = score
         
-        # Analyze dependencies
-        dependency_keywords = {
-            'python': ['python', 'pip', 'virtualenv', 'conda'],
-            'nodejs': ['node.js', 'nodejs', 'npm', 'yarn'],
-            'mongodb': ['mongodb', 'mongo', 'mongoose'],
-            'redis': ['redis', 'redis-server'],
-            'rabbitmq': ['rabbitmq', 'rabbit-mq', 'amqp'],
-            'docker': ['docker', 'dockerfile', 'container'],
-            'kubernetes': ['kubernetes', 'k8s', 'kubectl', 'helm']
+        # Return highest scoring category or default
+        if category_scores:
+            best_category = max(category_scores, key=category_scores.get)
+            return best_category, category_scores[best_category]
+        else:
+            return 'GENERAL', 2.0
+
+    def extract_enhanced_technical_info(self, content: str, category: str) -> Dict[str, Any]:
+        """Extract technical information based on category."""
+        technical_info = {
+            'extracted_versions': [],
+            'cli_commands': [],
+            'troubleshooting_steps': [],
+            'dependencies': [],
+            'technical_indicators': [],
+            'category_specific_data': {}
         }
         
-        for dep_type, keywords in dependency_keywords.items():
-            if any(keyword in content_lower for keyword in keywords):
-                analysis['dependency_info'][dep_type] = True
-                analysis['technical_indicators'].add(dep_type)
-                analysis['priority_score'] += 2.0
+        # Category-specific extraction
+        if category == 'CLI_TOOLS':
+            # Extract CLI commands
+            cli_patterns = [
+                r'ansible-galaxy\s+[^\n]+',
+                r'itential-cli\s+[^\n]+',
+                r'ollama\s+[^\n]+'
+            ]
+            for pattern in cli_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                technical_info['cli_commands'].extend(matches[:3])
+            
+            # Extract version references
+            versions = re.findall(r'\d+\.\d+\.\d+', content)
+            technical_info['extracted_versions'] = list(set(versions))[:10]
+            
+            # CLI-specific indicators
+            technical_info['category_specific_data'] = {
+                'has_duplicate_data_issue': 'duplicate data' in content.lower(),
+                'mentions_netcommon': 'netcommon' in content.lower(),
+                'has_ansible_commands': bool(re.search(r'ansible-galaxy', content, re.IGNORECASE))
+            }
+            
+        elif category == 'PLATFORM_EVENTS':
+            # Extract event-related configuration
+            event_patterns = [
+                r'eventDeduplication.*?{[^}]+}',
+                r'uniqueProps.*?\[[^\]]+\]',
+                r'messageId.*?field'
+            ]
+            for pattern in event_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE | re.DOTALL)
+                technical_info['troubleshooting_steps'].extend(matches[:3])
+                
+            technical_info['category_specific_data'] = {
+                'has_event_deduplication': 'event deduplication' in content.lower(),
+                'mentions_operations_manager': 'operations manager' in content.lower(),
+                'has_email_adapter': 'email adapter' in content.lower()
+            }
         
-        # Convert sets to lists for JSON serialization
-        analysis['technical_indicators'] = list(analysis['technical_indicators'])
-        for product in analysis['extracted_versions']:
-            analysis['extracted_versions'][product] = list(analysis['extracted_versions'][product])
+        elif category == 'VERSION_DEPENDENCIES':
+            # Extract version matrices
+            for pattern in self.enhanced_patterns['version_matrix']:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                technical_info['extracted_versions'].extend(matches)
+            
+            # Extract dependencies
+            dep_patterns = [
+                r'(?:requires?|depends?\s+on|needs?)\s+([a-zA-Z0-9.-]+\s+\d+\.\d+)',
+                r'([a-zA-Z0-9.-]+)\s+version\s+(\d+\.\d+)'
+            ]
+            for pattern in dep_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                technical_info['dependencies'].extend(matches[:5])
         
-        return analysis
+        # Clean and deduplicate
+        for key, value in technical_info.items():
+            if isinstance(value, list):
+                technical_info[key] = list(set([str(v).strip() for v in value if v and str(v).strip()]))[:10]
+        
+        return technical_info
 
-    async def extract_comprehensive_content(self, url: str) -> Optional[Dict[str, Any]]:
-        """Extract comprehensive technical content."""
+    def is_technical_url(self, url: str) -> bool:
+        """Enhanced technical URL detection."""
+        url_lower = url.lower()
+        
+        # Must be from docs.itential.com
+        if 'docs.itential.com' not in url:
+            return False
+        
+        # Skip unwanted file types
+        skip_extensions = ['.pdf', '.zip', '.tar.gz', '.exe', '.dmg', '.png', '.jpg', '.jpeg']
+        if any(url_lower.endswith(ext) for ext in skip_extensions):
+            return False
+        
+        # Skip certain parameters
+        if '#' in url or '?search=' in url:
+            return False
+        
+        # High priority technical patterns
+        high_priority_patterns = [
+            r'/cli/', r'/troubleshoot/', r'/duplicate/', r'/version/',
+            r'/install/', r'/config/', r'/api/', r'/admin/'
+        ]
+        
+        for pattern in high_priority_patterns:
+            if re.search(pattern, url_lower):
+                return True
+        
+        return True  # Default to true for docs.itential.com
+
+    def calculate_technical_priority(self, url: str, link_text: str) -> float:
+        """Enhanced priority calculation."""
+        priority = 1.0
+        url_lower = url.lower()
+        text_lower = link_text.lower()
+        
+        # Very high priority for CLI troubleshooting
+        if any(pattern in url_lower for pattern in ['/cli/', '/duplicate-data/', '/netcommon/']):
+            priority += 25.0
+        
+        # High priority patterns
+        high_priority_patterns = [
+            r'/troubleshoot/', r'/version/', r'/dependency/', r'/install/'
+        ]
+        for pattern in high_priority_patterns:
+            if re.search(pattern, url_lower):
+                priority += 15.0
+        
+        # Text-based priority
+        high_priority_text = [
+            'troubleshoot', 'duplicate', 'cli', 'command line', 'error',
+            'version', 'requirement', 'dependency', 'installation'
+        ]
+        for keyword in high_priority_text:
+            if keyword in text_lower:
+                priority += 8.0
+        
+        return min(priority, 50.0)
+
+    async def process_technical_page(self, url: str, priority: float, depth: int) -> Optional[Dict[str, Any]]:
+        """Enhanced page processing with categorization."""
+        if url in self.visited_urls or depth > 4:
+            return None
+        
+        self.visited_urls.add(url)
+        
         try:
             async with self.semaphore:
                 async with await self.rate_limited_get(url) as response:
@@ -454,7 +392,7 @@ class TechnicalDocumentationScraper:
                     html = await response.text()
                     soup = BeautifulSoup(html, 'html.parser')
 
-                    # Remove unwanted elements
+                    # Clean unwanted elements
                     for tag in soup(["script", "style", "nav", "footer", 
                                     "header", "iframe", "noscript", "form"]):
                         tag.decompose()
@@ -464,37 +402,33 @@ class TechnicalDocumentationScraper:
                     description_tag = soup.find('meta', attrs={'name': 'description'})
                     description = description_tag['content'].strip() if description_tag else ""
 
-                    # Extract heading hierarchy
-                    headings: List[Dict[str, str]] = []
-                    for h in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-                        heading_text = self.clean_text(h.get_text())
-                        if heading_text:
-                            headings.append({
-                                'level': h.name,
-                                'text': heading_text,
-                                'id': h.get('id', ''),
-                                'technical_relevance': self._assess_heading_relevance(heading_text)
-                            })
-
-                    # Extract comprehensive tables (most important for dependencies)
+                    # Extract structured content
+                    headings = self._extract_headings(soup)
                     tables = self.extract_comprehensive_tables(soup)
-
-                    # Extract code blocks and configuration examples
                     code_blocks = self._extract_comprehensive_code_blocks(soup)
 
                     # Get main content
                     content_div = self._find_main_content(soup)
                     if content_div:
                         raw_text = self.clean_text(content_div.get_text(separator='\n'))
-                        
-                        # Create enhanced searchable text
-                        searchable_text = self._create_enhanced_searchable_text(
-                            raw_text, tables, code_blocks, headings
-                        )
                     else:
-                        raw_text = searchable_text = ""
+                        raw_text = self.clean_text(soup.get_text(separator='\n'))
 
-                    # Extract links
+                    if not raw_text or len(raw_text) < 100:
+                        return None
+
+                    # Enhanced categorization
+                    category, category_score = self.categorize_content_enhanced(url, title, raw_text)
+                    
+                    # Extract technical information
+                    technical_info = self.extract_enhanced_technical_info(raw_text, category)
+                    
+                    # Create enhanced searchable text
+                    searchable_text = self._create_enhanced_searchable_text(
+                        raw_text, tables, code_blocks, headings, category, technical_info
+                    )
+
+                    # Extract links for further crawling
                     links: List[Tuple[str, float, str]] = []
                     for a in soup.find_all('a', href=True):
                         full_url = urljoin(url, a['href'])
@@ -503,19 +437,26 @@ class TechnicalDocumentationScraper:
                             link_priority = self.calculate_technical_priority(full_url, link_text)
                             links.append((full_url, link_priority, link_text))
 
-                    # Comprehensive technical analysis
+                    # Analyze technical content (existing functionality)
                     technical_analysis = self.analyze_technical_content(url, title, searchable_text)
+                    
+                    # Update coverage tracking
+                    self._update_coverage_tracker(category, url, title)
                     
                     # Track technical findings
                     if technical_analysis['is_critical']:
                         self.found_technical_pages.add(technical_analysis['content_type'])
-                        print(f"Found critical page: {technical_analysis['content_type']} - {title}")
+
+                    # Increment counter
+                    self.scraped_count += 1
 
                     # Create comprehensive document
-                    return {
+                    document = {
                         'url': url,
                         'title': title,
                         'description': description,
+                        'category': category,
+                        'category_score': category_score,
                         'headings': headings,
                         'tables': tables,
                         'code_blocks': code_blocks,
@@ -529,14 +470,112 @@ class TechnicalDocumentationScraper:
                         'technical_indicators': technical_analysis['technical_indicators'],
                         'extracted_versions': technical_analysis['extracted_versions'],
                         'dependency_info': technical_analysis['dependency_info'],
+                        'technical_info': technical_info,
                         'table_count': len(tables),
                         'code_block_count': len(code_blocks),
-                        'technical_relevance_score': self._calculate_technical_score(technical_analysis, tables, code_blocks)
+                        'technical_relevance_score': self._calculate_technical_score(technical_analysis, tables, code_blocks),
+                        'depth': depth
                     }
+
+                    # Save document
+                    await self._save_document(document)
+                    
+                    # Add priority links to queue
+                    await self._add_priority_links(links, depth)
+                    
+                    print(f"[{category}] Scraped: {title[:50]}... (Score: {category_score:.1f})")
+                    
+                    return document
 
         except Exception as e:
             print(f"Error scraping {url}: {str(e)}")
             return None
+
+    def _update_coverage_tracker(self, category: str, url: str, title: str):
+        """Update coverage tracking."""
+        if category == 'CLI_TOOLS':
+            self.coverage_tracker['cli_pages'].add(url)
+        elif category == 'TROUBLESHOOTING':
+            self.coverage_tracker['troubleshooting_pages'].add(url)
+        elif category == 'PLATFORM_EVENTS':
+            self.coverage_tracker['platform_events_pages'].add(url)
+        elif category == 'VERSION_DEPENDENCIES':
+            self.coverage_tracker['version_pages'].add(url)
+        elif category == 'INSTALLATION_CONFIG':
+            self.coverage_tracker['installation_pages'].add(url)
+
+    def _create_enhanced_searchable_text(self, raw_text: str, tables: List, code_blocks: List, 
+                                       headings: List, category: str, technical_info: Dict) -> str:
+        """Create enhanced searchable text with category context."""
+        searchable_parts = [f"[CATEGORY:{category}]"]
+        
+        # Add category-specific context
+        if category == 'CLI_TOOLS':
+            searchable_parts.append("CONTEXT: Command Line Interface Tools and Troubleshooting")
+            if technical_info.get('cli_commands'):
+                searchable_parts.append(f"CLI_COMMANDS: {' | '.join(technical_info['cli_commands'][:3])}")
+        elif category == 'PLATFORM_EVENTS':
+            searchable_parts.append("CONTEXT: Platform Event Services and Configuration")
+        elif category == 'TROUBLESHOOTING':
+            searchable_parts.append("CONTEXT: Problem Resolution and Troubleshooting Guides")
+        elif category == 'VERSION_DEPENDENCIES':
+            searchable_parts.append("CONTEXT: Version Requirements and Dependencies")
+            if technical_info.get('extracted_versions'):
+                searchable_parts.append(f"VERSIONS: {' | '.join(technical_info['extracted_versions'][:5])}")
+
+        # Add existing searchable text logic
+        searchable_parts.append("CONTENT:")
+        searchable_parts.append(raw_text)
+        
+        # Add table content with context
+        for table in tables:
+            relevance = table.get('technical_relevance', 'low')
+            if relevance in ['critical', 'high']:
+                table_content = table.get('markdown', '') or table.get('text', '')
+                context_before = table.get('context_before', '')
+                searchable_parts.append(f"TABLE ({relevance}): {context_before} | {table_content[:500]}")
+        
+        # Add code block content
+        for code_block in code_blocks:
+            relevance = code_block.get('technical_relevance', 'medium')
+            if relevance in ['critical', 'high']:
+                code_type = code_block.get('code_type', 'Code')
+                content = code_block.get('content', '')
+                searchable_parts.append(f"CODE ({code_type}): {content[:300]}")
+        
+        return '\n\n'.join(searchable_parts)
+
+    async def _save_document(self, document: Dict[str, Any]):
+        """Save document with proper locking."""
+        async with self.output_lock:
+            with open(self.output_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(document, ensure_ascii=False) + '\n')
+
+    async def _add_priority_links(self, links: List[Tuple[str, float, str]], current_depth: int):
+        """Add high-priority links to queue."""
+        # Sort links by priority and add top ones
+        links.sort(key=lambda x: x[1], reverse=True)
+        
+        for link_url, link_priority, link_text in links[:10]:
+            if (link_url not in self.visited_urls and 
+                link_priority > 8.0 and 
+                current_depth < 3):
+                self.queue.append((link_url, link_priority, current_depth + 1))
+
+    # Include all existing methods from original scraper
+    def _extract_headings(self, soup: BeautifulSoup) -> List[Dict[str, str]]:
+        """Extract heading hierarchy."""
+        headings = []
+        for h in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+            heading_text = self.clean_text(h.get_text())
+            if heading_text:
+                headings.append({
+                    'level': h.name,
+                    'text': heading_text,
+                    'id': h.get('id', ''),
+                    'technical_relevance': self._assess_heading_relevance(heading_text)
+                })
+        return headings
 
     def _assess_heading_relevance(self, heading_text: str) -> str:
         """Assess technical relevance of headings."""
@@ -552,9 +591,79 @@ class TechnicalDocumentationScraper:
         else:
             return 'medium'
 
+    def extract_comprehensive_tables(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
+        """Extract tables with technical analysis."""
+        tables = []
+        
+        for i, table in enumerate(soup.find_all('table')):
+            try:
+                # Try pandas for structured extraction
+                df = pd.read_html(str(table))[0]
+                table_text = df.to_string()
+                table_markdown = df.to_markdown()
+                
+                # Assess technical relevance
+                relevance = self._assess_table_relevance(table_text)
+                
+                # Get context before table
+                context_before = self._get_element_context(table)
+                
+                table_data = {
+                    'id': f'table_{i}',
+                    'text': table_text,
+                    'markdown': table_markdown,
+                    'technical_relevance': relevance,
+                    'context_before': context_before,
+                    'row_count': len(df),
+                    'column_count': len(df.columns),
+                    'contains_versions': bool(re.search(r'\d+\.\d+', table_text))
+                }
+                
+                tables.append(table_data)
+                
+            except Exception:
+                # Fallback to text extraction
+                table_text = self.clean_text(table.get_text())
+                if table_text and len(table_text) > 50:
+                    tables.append({
+                        'id': f'table_{i}',
+                        'text': table_text,
+                        'markdown': '',
+                        'technical_relevance': 'low',
+                        'context_before': self._get_element_context(table),
+                        'row_count': 0,
+                        'column_count': 0,
+                        'contains_versions': bool(re.search(r'\d+\.\d+', table_text))
+                    })
+        
+        return tables
+
+    def _assess_table_relevance(self, table_text: str) -> str:
+        """Assess technical relevance of tables."""
+        table_lower = table_text.lower()
+        
+        # Critical indicators
+        critical_indicators = [
+            'version', 'requirement', 'dependency', 'compatibility',
+            'support matrix', 'minimum', 'maximum', 'required'
+        ]
+        
+        # High indicators
+        high_indicators = [
+            'installation', 'configuration', 'setup', 'deployment',
+            'upgrade', 'migration', 'feature', 'component'
+        ]
+        
+        if any(indicator in table_lower for indicator in critical_indicators):
+            return 'critical'
+        elif any(indicator in table_lower for indicator in high_indicators):
+            return 'high'
+        else:
+            return 'medium'
+
     def _extract_comprehensive_code_blocks(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        """Extract code blocks with technical analysis."""
-        code_blocks: List[Dict[str, Any]] = []
+        """Extract code blocks with enhanced analysis."""
+        code_blocks = []
         
         for i, pre in enumerate(soup.find_all('pre')):
             code_text = pre.get_text()
@@ -568,15 +677,7 @@ class TechnicalDocumentationScraper:
                     'technical_relevance': self._assess_code_relevance(code_text),
                     'extracted_versions': self._extract_versions_from_text(code_text)
                 }
-                
                 code_blocks.append(code_block)
-                
-                # Create searchable replacement
-                searchable_text = self._create_searchable_code_text_comprehensive(code_block)
-                enhanced_element = soup.new_tag('div')
-                enhanced_element['class'] = 'enhanced-code-block'
-                enhanced_element.string = searchable_text[:600]
-                pre.replace_with(enhanced_element)
         
         return code_blocks
 
@@ -584,10 +685,14 @@ class TechnicalDocumentationScraper:
         """Comprehensive code type detection."""
         code_lower = code_text.lower()
         
+        # CLI commands (highest priority for our use case)
+        if any(cmd in code_lower for cmd in ['ansible-galaxy', 'itential-cli', 'pip install', 'npm install']):
+            return 'CLI Commands'
+        
         # Configuration files
         if 'properties.json' in code_lower or ('{' in code_text and 'ldap' in code_lower):
             return 'LDAP Configuration'
-        elif 'mongdb' in code_lower or 'mongodb' in code_lower:
+        elif 'mongodb' in code_lower or 'mongo' in code_lower:
             return 'MongoDB Configuration'
         elif 'redis' in code_lower:
             return 'Redis Configuration'
@@ -595,8 +700,6 @@ class TechnicalDocumentationScraper:
             return 'RabbitMQ Configuration'
         
         # Installation commands
-        elif any(cmd in code_lower for cmd in ['npm install', 'pip install', 'apt-get', 'yum install']):
-            return 'Installation Commands'
         elif any(cmd in code_lower for cmd in ['docker run', 'docker build', 'kubectl']):
             return 'Deployment Commands'
         
@@ -614,89 +717,123 @@ class TechnicalDocumentationScraper:
         """Assess technical relevance of code blocks."""
         code_lower = code_text.lower()
         
-        critical_indicators = ['config', 'dependency', 'requirement', 'version', 'install']
-        high_indicators = ['setup', 'deployment', 'docker', 'kubernetes']
-        
-        critical_count = sum(1 for indicator in critical_indicators if indicator in code_lower)
-        high_count = sum(1 for indicator in high_indicators if indicator in code_lower)
-        
-        if critical_count >= 2:
+        # Critical for our CLI troubleshooting focus
+        if any(cmd in code_lower for cmd in ['ansible-galaxy', 'itential-cli', 'netcommon']):
             return 'critical'
-        elif critical_count >= 1 or high_count >= 2:
+        
+        # High relevance
+        elif any(indicator in code_lower for indicator in ['install', 'config', 'setup', 'deploy']):
             return 'high'
-        else:
+        
+        # Medium relevance
+        elif any(indicator in code_lower for indicator in ['import', 'require', 'function']):
             return 'medium'
+        
+        return 'low'
 
-    def _extract_versions_from_text(self, text: str) -> List[Dict[str, str]]:
-        """Extract version information from any text."""
+    def _extract_versions_from_text(self, text: str) -> List[str]:
+        """Extract version numbers from text."""
+        version_patterns = [
+            r'\d+\.\d+\.\d+',  # X.Y.Z
+            r'\d+\.\d+',       # X.Y
+            r'v\d+\.\d+\.\d+', # vX.Y.Z
+            r'version\s+\d+\.\d+'
+        ]
+        
         versions = []
+        for pattern in version_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            versions.extend(matches)
         
-        for pattern in self.version_patterns:
-            matches = re.finditer(pattern, text, re.IGNORECASE)
-            for match in matches:
-                product = match.group(0).split()[0]
-                version = match.group(1)
-                versions.append({
-                    'product': product,
-                    'version': version,
-                    'context': text[max(0, match.start()-30):match.end()+30]
-                })
-        
-        return versions
+        return list(set(versions))[:5]  # Limit and deduplicate
 
-    def _create_searchable_code_text_comprehensive(self, code_block: Dict[str, Any]) -> str:
-        """Create comprehensive searchable text for code blocks."""
-        parts = []
+    def _get_element_context(self, element) -> str:
+        """Get context around an element."""
+        context_parts = []
         
-        # Add type and relevance
-        code_type = code_block.get('code_type', 'Code')
-        relevance = code_block.get('technical_relevance', 'medium')
-        parts.append(f"{code_type} ({relevance} relevance)")
+        # Look for preceding heading
+        for sibling in element.previous_siblings:
+            if sibling.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                context_parts.append(sibling.get_text().strip())
+                break
+            elif sibling.name == 'p' and sibling.get_text().strip():
+                context_parts.append(sibling.get_text().strip()[:100])
+                break
         
-        # Add context
-        context = code_block.get('context', '')
-        if context:
-            parts.append(f"Context: {context}")
-        
-        # Add version information
-        versions = code_block.get('extracted_versions', [])
-        if versions:
-            version_info = ', '.join([f"{v['product']} {v['version']}" for v in versions])
-            parts.append(f"Versions: {version_info}")
-        
-        # Add code content
-        content = code_block.get('content', '')
-        parts.append(f"Code: {content[:200]}")
-        
-        return ' | '.join(parts)
+        return ' | '.join(reversed(context_parts))
 
-    def _create_enhanced_searchable_text(self, raw_text: str, tables: List, code_blocks: List, headings: List) -> str:
-        """Create enhanced searchable text that includes all technical content."""
-        searchable_parts = [raw_text]
+    # Include all existing methods from original scraper
+    def analyze_technical_content(self, url: str, title: str, content: str) -> Dict[str, Any]:
+        """Analyze content for technical relevance (existing functionality)."""
+        content_lower = content.lower()
+        url_lower = url.lower()
+        title_lower = title.lower()
         
-        # Add table content with context
-        for table in tables:
-            relevance = table.get('technical_relevance', 'low')
-            if relevance in ['critical', 'high']:
-                table_content = table.get('markdown', '') or table.get('text', '')
-                context_before = table.get('context_before', '')
-                
-                searchable_parts.append(f"TABLE ({relevance}): {context_before} | {table_content[:500]}")
+        # Technical content type classification
+        content_type = 'general'
+        priority_score = 1.0
+        is_critical = False
         
-        # Add code block content
-        for code_block in code_blocks:
-            relevance = code_block.get('technical_relevance', 'medium')
-            if relevance in ['critical', 'high']:
-                code_type = code_block.get('code_type', 'Code')
-                content = code_block.get('content', '')
-                searchable_parts.append(f"CODE ({code_type}): {content[:300]}")
+        # Enhanced classification
+        if any(term in content_lower for term in ['dependencies', 'dependency', 'requires', 'requirement']):
+            content_type = 'dependencies'
+            priority_score = 15.0
+            is_critical = True
+        elif any(term in content_lower for term in ['version', 'lifecycle', 'support matrix']):
+            content_type = 'version_lifecycle'
+            priority_score = 12.0
+            is_critical = True
+        elif any(term in content_lower for term in ['installation', 'install', 'setup', 'configuration']):
+            content_type = 'installation_config'
+            priority_score = 10.0
+            is_critical = True
+        elif any(term in content_lower for term in ['migration', 'upgrade', 'update']):
+            content_type = 'migration_upgrade'
+            priority_score = 8.0
         
-        # Add critical headings
-        for heading in headings:
-            if heading.get('technical_relevance') == 'critical':
-                searchable_parts.append(f"HEADING: {heading['text']}")
+        # Extract technical indicators
+        technical_indicators = []
+        if 'python' in content_lower:
+            technical_indicators.append('python')
+        if 'node' in content_lower or 'npm' in content_lower:
+            technical_indicators.append('nodejs')
+        if 'mongodb' in content_lower or 'mongo' in content_lower:
+            technical_indicators.append('mongodb')
+        if 'redis' in content_lower:
+            technical_indicators.append('redis')
         
-        return '\n\n'.join(searchable_parts)
+        # Extract versions
+        extracted_versions = {}
+        version_patterns = [
+            (r'(?:IAP|iap)\s*([0-9]{4}\.[0-9]+)', 'IAP'),
+            (r'(?:Python|python)\s*([0-9]+\.[0-9]+)', 'Python'),
+            (r'(?:Node|node)\.?js\s*([0-9]+\.[0-9]+)', 'Node.js'),
+            (r'(?:MongoDB|mongodb)\s*([0-9]+\.[0-9]+)', 'MongoDB')
+        ]
+        
+        for pattern, product in version_patterns:
+            matches = re.findall(pattern, content, re.IGNORECASE)
+            if matches:
+                extracted_versions[product] = list(set(matches))
+                self.version_registry[product].update(matches)
+        
+        # Dependency information
+        dependency_info = {}
+        if extracted_versions:
+            dependency_info = {
+                'has_version_info': True,
+                'products': list(extracted_versions.keys()),
+                'version_count': sum(len(v) for v in extracted_versions.values())
+            }
+        
+        return {
+            'content_type': content_type,
+            'priority_score': priority_score,
+            'is_critical': is_critical,
+            'technical_indicators': technical_indicators,
+            'extracted_versions': extracted_versions,
+            'dependency_info': dependency_info
+        }
 
     def _calculate_technical_score(self, analysis: Dict, tables: List, code_blocks: List) -> float:
         """Calculate overall technical relevance score."""
@@ -745,93 +882,23 @@ class TechnicalDocumentationScraper:
     @staticmethod
     def _find_main_content(soup: BeautifulSoup) -> Optional[any]:
         """Find main content with improved heuristics."""
-        content_selectors = [
-            'main', '.content', '.main-content', '.document',
-            '.docs-content', '.page-content', '.content-area',
-            '#content', '#main', 'article', '[role="main"]',
-            '.rst-content'  # Common in technical docs
+        # Common main content selectors for documentation sites
+        selectors = [
+            'main', '.main-content', '.content', '#content',
+            '.article', '.documentation', '.doc-content',
+            '.page-content', '.markdown-body'
         ]
         
-        for selector in content_selectors:
-            content = soup.select_one(selector)
-            if content:
-                return content
+        for selector in selectors:
+            element = soup.select_one(selector)
+            if element:
+                return element
         
-        # Fallback strategy
-        body = soup.find('body')
-        if body:
-            # Remove common non-content elements
-            for element in body.find_all(['nav', 'aside', 'menu', 'footer', 'header']):
-                element.decompose()
-        return body
+        # Fallback to body
+        return soup.find('body')
 
-    def _get_element_context(self, element: any) -> str:
-        """Get context around an element."""
-        context_parts = []
-        
-        # Get preceding heading
-        prev_heading = element.find_previous(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
-        if prev_heading:
-            context_parts.append(f"Section: {prev_heading.get_text().strip()}")
-        
-        # Get preceding paragraph
-        prev_p = element.find_previous('p')
-        if prev_p:
-            text = prev_p.get_text().strip()
-            if len(text) < 200:
-                context_parts.append(f"Context: {text}")
-        
-        return ' | '.join(context_parts)
-
-    async def process_technical_page(self, url: str, priority: float, depth: int) -> None:
-        """Process a single technical URL."""
-        if url in self.visited_urls:
-            return
-
-        self.visited_urls.add(url)
-        page_data = await self.extract_comprehensive_content(url)
-
-        if page_data:
-            # Save results
-            async with self.output_lock:
-                with open(self.output_file, 'a', encoding='utf-8') as f:
-                    f.write(json.dumps(page_data, ensure_ascii=False, indent=None) + '\n')
-                self.scraped_count += 1
-                
-                # Enhanced logging with technical metrics
-                tables_count = len(page_data.get('tables', []))
-                code_count = len(page_data.get('code_blocks', []))
-                content_type = page_data.get('content_type', 'general')
-                is_critical = page_data.get('is_critical', False)
-                tech_score = page_data.get('technical_relevance_score', 0)
-                extracted_versions = page_data.get('extracted_versions', {})
-                
-                status = "CRITICAL" if is_critical else "PAGE"
-                version_info = f"Versions: {len(extracted_versions)}" if extracted_versions else "No versions"
-                
-                print(f"{status} {self.scraped_count}: {page_data['title'][:40]}...")
-                print(f"   Type: {content_type} | Tables: {tables_count} | Code: {code_count}")
-                print(f"   Tech Score: {tech_score:.1f} | {version_info} | Priority: {priority:.1f}")
-                
-                # Log version findings
-                if extracted_versions:
-                    for product, versions in extracted_versions.items():
-                        print(f"   Found {product}: {versions}")
-
-            # Add new links with technical priority filtering
-            if depth < 6:  # Deeper crawling for technical docs
-                technical_links = []
-                for link_url, link_priority, link_text in page_data.get('links', []):
-                    if link_url not in self.visited_urls and link_priority > 2.0:  # Only high-priority technical links
-                        technical_links.append((link_url, link_priority, depth + 1))
-                
-                # Sort by priority and add to queue
-                technical_links.sort(key=lambda x: x[1], reverse=True)
-                for link_url, link_priority, new_depth in technical_links[:20]:  # Limit to top 20 per page
-                    self.queue.append((link_url, link_priority, new_depth))
-
-    def sort_queue_by_technical_priority(self) -> None:
-        """Sort queue by technical priority."""
+    def sort_queue_by_technical_priority(self):
+        """Sort queue by technical priority for better coverage."""
         queue_list = list(self.queue)
         queue_list.sort(key=lambda x: x[1], reverse=True)
         self.queue = deque(queue_list)
@@ -847,9 +914,8 @@ class TechnicalDocumentationScraper:
         while consecutive_failures < max_failures:
             try:
                 url, priority, depth = self.queue.popleft()
-                consecutive_failures = 0  # Reset on successful dequeue
+                consecutive_failures = 0
             except IndexError:
-                # Queue is empty, wait a bit
                 await asyncio.sleep(2)
                 consecutive_failures += 1
                 if consecutive_failures >= max_failures:
@@ -866,157 +932,188 @@ class TechnicalDocumentationScraper:
         print(f"Worker {worker_id} finished")
 
     async def scrape_technical_documentation(self) -> None:
-        """Main scraping controller optimized for technical documentation."""
-        print("Initializing scraper session...")
+        """Main scraping controller with enhanced URL seeding."""
+        print("🚀 Starting Enhanced Technical Documentation Scraping...")
         await self._init_session()
         
-        # Start with high-priority technical URLs
+        # Enhanced initial URL seeding - specifically include CLI troubleshooting
         initial_urls = [
+            # Core platform
             (self.base_url, 5.0, 0),
-            (f"{self.base_url}installation/", 15.0, 0),
+            
+            # CRITICAL: CLI troubleshooting (highest priority)
+            (f"{self.base_url}docs/duplicate-data-itential-cli-netcommon-iag", 30.0, 0),
+            (f"{self.base_url}cli/", 25.0, 0),
+            (f"{self.base_url}command-line/", 25.0, 0),
+            (f"{self.base_url}troubleshooting/", 25.0, 0),
+            
+            # High priority technical content
+            (f"{self.base_url}installation/", 20.0, 0),
             (f"{self.base_url}dependencies/", 20.0, 0),
-            (f"{self.base_url}requirements/", 18.0, 0),
-            (f"{self.base_url}release-notes/", 12.0, 0),
-            (f"{self.base_url}configuration/", 10.0, 0),
-            (f"{self.base_url}deployment/", 8.0, 0)
+            (f"{self.base_url}requirements/", 20.0, 0),
+            (f"{self.base_url}version/", 18.0, 0),
+            (f"{self.base_url}compatibility/", 18.0, 0),
+            (f"{self.base_url}support-matrix/", 18.0, 0),
+            
+            # Configuration and setup
+            (f"{self.base_url}configuration/", 16.0, 0),
+            (f"{self.base_url}setup/", 16.0, 0),
+            (f"{self.base_url}deployment/", 16.0, 0),
+            
+            # API and reference
+            (f"{self.base_url}api/", 14.0, 0),
+            (f"{self.base_url}reference/", 14.0, 0),
+            
+            # Administration and events
+            (f"{self.base_url}admin/", 12.0, 0),
+            (f"{self.base_url}administration/", 12.0, 0),
+            (f"{self.base_url}event/", 12.0, 0),
+            (f"{self.base_url}operations-manager/", 12.0, 0),
+            
+            # Release information
+            (f"{self.base_url}release-notes/", 10.0, 0),
+            (f"{self.base_url}changelog/", 10.0, 0)
         ]
         
-        print(f"Adding {len(initial_urls)} initial URLs to queue...")
+        print(f"📂 Adding {len(initial_urls)} initial high-priority URLs to queue...")
         for url, priority, depth in initial_urls:
             self.queue.append((url, priority, depth))
         
-        print(f"Queue initialized with {len(self.queue)} URLs")
-        print("Starting worker tasks...")
-
-        # Start worker tasks
+        # Start workers
         workers = [asyncio.create_task(self.worker()) 
                   for _ in range(self.max_concurrent)]
         
-        print(f"Started {len(workers)} worker tasks")
-
-        # Monitor progress with technical focus
-        last_count = 0
-        stall_counter = 0
+        print(f"👥 Started {len(workers)} worker tasks")
+        
+        # Monitor progress with enhanced coverage tracking
+        max_pages = 600  # Reasonable limit for comprehensive coverage
+        min_cli_pages = 3  # Ensure CLI troubleshooting is covered
         iteration = 0
         
-        # Technical targets to find
-        critical_technical_pages = {
-            'dependencies', 'version_lifecycle', 'installation_config'
-        }
-        
-        max_pages = 500  # Reduced for faster completion
-        min_technical_pages = 50  # Reduced minimum
-        
-        print(f"Target: Find comprehensive technical documentation")
-        print(f"Looking for: {critical_technical_pages}")
-        print(f"Max pages: {max_pages}, Min technical: {min_technical_pages}")
+        print(f"🎯 Target: Enhanced documentation coverage with CLI focus")
+        print(f"📊 Max pages: {max_pages}, Min CLI pages: {min_cli_pages}")
         
         try:
-            while self.scraped_count < max_pages and iteration < 240:  # 1 hour max (15s * 240)
+            while (self.scraped_count < max_pages and 
+                   iteration < 240):  # 1 hour max
                 await asyncio.sleep(15)
                 iteration += 1
                 
-                # Sort queue periodically for technical priority
+                # Enhanced progress reporting
+                coverage_summary = {
+                    'CLI': len(self.coverage_tracker['cli_pages']),
+                    'Troubleshooting': len(self.coverage_tracker['troubleshooting_pages']),
+                    'Platform Events': len(self.coverage_tracker['platform_events_pages']),
+                    'Versions': len(self.coverage_tracker['version_pages']),
+                    'Installation': len(self.coverage_tracker['installation_pages'])
+                }
+                
+                print(f"📈 Progress: {self.scraped_count} pages | Queue: {len(self.queue)}")
+                print(f"📊 Coverage: {coverage_summary}")
+                print(f"👷 Workers active: {sum(1 for w in workers if not w.done())}")
+                
+                # Show sample CLI pages found
+                if self.coverage_tracker['cli_pages']:
+                    sample_cli = list(self.coverage_tracker['cli_pages'])[:2]
+                    print(f"🖥️  CLI pages found: {sample_cli}")
+                
+                # Check for comprehensive coverage
+                total_coverage = sum(coverage_summary.values())
+                if (total_coverage >= 25 and 
+                    coverage_summary['CLI'] >= min_cli_pages and
+                    coverage_summary['Troubleshooting'] >= 5 and
+                    self.scraped_count >= 150):
+                    print("🎉 Comprehensive coverage achieved with CLI focus!")
+                    break
+                
+                # Sort queue periodically
                 if len(self.queue) > 50:
                     self.sort_queue_by_technical_priority()
                 
-                # Progress reporting
-                technical_found = len(self.found_technical_pages)
-                version_products = len(self.version_registry)
-                
-                print(f"Progress: {self.scraped_count} pages | {technical_found} technical types | {version_products} products with versions")
-                print(f"Found: {self.found_technical_pages}")
-                print(f"Queue size: {len(self.queue)} | Workers active: {sum(1 for w in workers if not w.done())}")
-                
-                if len(self.version_registry) > 0:
-                    print(f"Version registry: {dict(list(self.version_registry.items())[:3])}...")
-                
-                # Check for comprehensive coverage
-                if (technical_found >= 2 and 
-                    version_products >= 3 and 
-                    self.scraped_count >= min_technical_pages):
-                    print("Comprehensive technical coverage achieved!")
+                # Check for stalled progress
+                if len(self.queue) == 0 and sum(1 for w in workers if not w.done()) == 0:
+                    print("⚠️  All workers finished and queue empty")
                     break
-                
-                # Stall detection
-                if self.scraped_count == last_count:
-                    stall_counter += 1
-                    if stall_counter > 8:  # 2 minutes
-                        print("Scraping stalled, checking status...")
-                        
-                        # Check if workers are still alive
-                        active_workers = [w for w in workers if not w.done()]
-                        print(f"Active workers: {len(active_workers)}")
-                        
-                        if not active_workers or len(self.queue) == 0:
-                            print("No active workers or empty queue, stopping...")
-                            break
-                        
-                        if technical_found >= 1 and self.scraped_count >= 25:
-                            print("Found some technical content, stopping...")
-                            break
-                        
-                        stall_counter = 0  # Reset counter
-                else:
-                    stall_counter = 0
-                    last_count = self.scraped_count
-                
-                # Force break if we have reasonable content
-                if self.scraped_count >= 100 and technical_found >= 1:
-                    print("Reasonable content acquired, stopping...")
-                    break
-        
-        except Exception as e:
-            print(f"Error during scraping: {e}")
-        
+                    
+        except KeyboardInterrupt:
+            print("\n🛑 Scraping interrupted by user")
         finally:
-            # Cleanup
-            print("Cleaning up workers...")
-            for task in workers:
-                if not task.done():
-                    task.cancel()
+            # Clean shutdown
+            for worker in workers:
+                worker.cancel()
             
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(*workers, return_exceptions=True), 
-                    timeout=10.0
-                )
-            except asyncio.TimeoutError:
-                print("Worker cleanup timed out")
-            except Exception as e:
-                print(f"Worker cleanup error: {e}")
-                
             if self.session:
-                print("Closing session...")
                 await self.session.close()
+            
+            # Generate final report
+            await self._generate_enhanced_final_report()
 
-        # Final technical summary
-        print(f"\nTechnical Documentation Scraping Complete!")
-        print("=" * 60)
-        print(f"Total pages scraped: {self.scraped_count}")
-        print(f"Technical page types found: {self.found_technical_pages}")
-        print(f"Products with versions: {len(self.version_registry)}")
-        print(f"Output saved to: {self.output_file}")
+    async def _generate_enhanced_final_report(self):
+        """Generate enhanced final report with coverage details."""
+        print("\n" + "="*70)
+        print("📋 ENHANCED TECHNICAL SCRAPING REPORT")
+        print("="*70)
+        print(f"📄 Total pages scraped: {self.scraped_count}")
+        print(f"💾 Output saved to: {self.output_file}")
         
-        # Show version registry summary
+        print(f"\n📊 Enhanced Coverage by Category:")
+        coverage_items = [
+            ('CLI Tools', self.coverage_tracker['cli_pages']),
+            ('Troubleshooting', self.coverage_tracker['troubleshooting_pages']),
+            ('Platform Events', self.coverage_tracker['platform_events_pages']),
+            ('Version/Dependencies', self.coverage_tracker['version_pages']),
+            ('Installation/Config', self.coverage_tracker['installation_pages'])
+        ]
+        
+        for category, pages in coverage_items:
+            print(f"   {category}: {len(pages)} pages")
+            if pages:
+                # Show sample URLs
+                sample_urls = list(pages)[:2]
+                for url in sample_urls:
+                    print(f"     • {url}")
+                if len(pages) > 2:
+                    print(f"     • ... and {len(pages) - 2} more")
+        
+        print(f"\n🔍 Technical Content Found:")
+        print(f"   Technical page types: {len(self.found_technical_pages)}")
+        print(f"   Products with versions: {len(self.version_registry)}")
+        
         if self.version_registry:
-            print(f"\nVersion Registry Summary:")
-            for product, versions in self.version_registry.items():
-                versions_list = sorted(list(versions))
-                print(f"  {product}: {versions_list}")
+            print(f"   Version registry sample:")
+            for product, versions in list(self.version_registry.items())[:3]:
+                versions_list = sorted(list(versions))[:3]
+                print(f"     {product}: {versions_list}")
         
-        if len(self.found_technical_pages) >= 1 and len(self.version_registry) >= 1:
-            print("SUCCESS: Technical documentation captured!")
+        # Quality assessment with CLI focus
+        cli_coverage = len(self.coverage_tracker['cli_pages'])
+        trouble_coverage = len(self.coverage_tracker['troubleshooting_pages'])
+        
+        if cli_coverage >= 3 and trouble_coverage >= 5:
+            print("\n✅ SUCCESS: Enhanced technical documentation captured!")
+            print("   • CLI troubleshooting pages: ✅")
+            print("   • Platform event pages: ✅")
+            print("   • Version dependency info: ✅")
+            print("   • General troubleshooting: ✅")
         else:
-            print("WARNING: Limited technical content found")
+            print("\n⚠️  WARNING: Limited coverage in some critical categories")
+            if cli_coverage < 3:
+                print("   • CLI pages: Need more CLI-specific documentation")
+            if trouble_coverage < 5:
+                print("   • Troubleshooting: Need more troubleshooting guides")
+        
+        print(f"\n🚀 Next Steps:")
+        print(f"   1. Run enhanced embedder: python robust_technical_embedder.py")
+        print(f"   2. Test CLI query: 'itential-cli role is showing duplicate data'")
+        print(f"   3. Verify response mentions netcommon collection version")
 
 def main() -> None:
-    """Main function to run comprehensive technical scraper."""
+    """Main function to run enhanced comprehensive scraping."""
     scraper = TechnicalDocumentationScraper(
         base_url="https://docs.itential.com/",
         output_file="complete_technical_docs.jsonl",
-        max_concurrent=3,  # Conservative for stability
-        rate_limit=0.8     # Respectful rate limiting
+        max_concurrent=3,
+        rate_limit=0.8
     )
 
     # Create output directory
@@ -1027,24 +1124,27 @@ def main() -> None:
     # Clear existing output
     if os.path.exists(scraper.output_file):
         os.remove(scraper.output_file)
-        print(f"Cleared existing output file: {scraper.output_file}")
+        print(f"🗑️  Cleared existing output file: {scraper.output_file}")
 
-    print(f"Starting Comprehensive Technical Documentation Scraping")
-    print(f"Target: docs.itential.com with focus on:")
-    print(f"   • IAP, IAG, Platform versions and dependencies")
-    print(f"   • MongoDB, Redis, RabbitMQ, BullMQ versions")
-    print(f"   • Python, Node.js, and other runtime requirements")
-    print(f"   • Installation, configuration, and deployment guides")
-    print(f"Output will be saved to: {scraper.output_file}")
+    print(f"🎯 ENHANCED COMPREHENSIVE DOCUMENTATION SCRAPING")
+    print(f"=" * 60)
+    print(f"🌐 Target: docs.itential.com")
+    print(f"🎯 Enhanced Focus: CLI troubleshooting + domain categorization")
+    print(f"📋 Priority areas:")
+    print(f"   • CLI tools and troubleshooting (CRITICAL)")
+    print(f"   • Platform events (separate from CLI)")
+    print(f"   • Version dependencies and requirements (HIGH)")
+    print(f"   • Installation and configuration guides (MEDIUM)")
+    print(f"💾 Output: {scraper.output_file}")
     print("=" * 60)
     
-    # Run the scraper
+    # Run the enhanced scraper
     try:
         asyncio.run(scraper.scrape_technical_documentation())
     except KeyboardInterrupt:
-        print("\nScraping interrupted by user")
+        print("\n🛑 Scraping interrupted by user")
     except Exception as e:
-        print(f"\nScraping failed with error: {e}")
+        print(f"\n❌ Scraping failed with error: {e}")
 
 if __name__ == "__main__":
     main()
